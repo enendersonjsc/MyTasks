@@ -3,16 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meu Primeiro Site com GitHub Pages!</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-        h1 { color: #333; }
-        p { color: #666; }
-    </style>
+    <title>Meu Checklist de Prioridades</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>🎉 Olá, Mundo! 🎉</h1>
-    <p>Meu site está no ar, hospedado pelo GitHub Pages!</p>
-    <p>Este é o começo do meu projeto simples.</p>
+
+    <div class="container">
+        <h1>Meu Gerenciador de Tarefas</h1>
+
+        <div class="input-area">
+            <input type="text" id="task-input" placeholder="Adicione uma nova tarefa...">
+            <select id="priority-select">
+                <option value="alta">Prioridade ALTA (Vermelha)</option>
+                <option value="media">Prioridade Média (Amarela)</option>
+                <option value="baixa" selected>Prioridade Baixa (Azul)</option>
+            </select>
+            <button onclick="addTask()">Adicionar</button>
+        </div>
+
+        <ul id="task-list">
+            </ul>
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
