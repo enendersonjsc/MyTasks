@@ -8,7 +8,18 @@ const HISTORY_KEY = 'todoHistory';
 
 function getTasksFromStorage() {
     const tasksJson = localStorage.getItem('todoTasks');
-    return tasksJson ? JSON.parse(tasksJson) : [];
+    // Garante que todas as tarefas, mesmo as antigas, tenham um ID e historyLogged
+    let tasks = tasksJson ? JSON.parse(tasksJson) : [];
+    tasks = tasks.map(task => {
+        if (!task.id) {
+            task.id = Date.now() + Math.random(); // Adiciona ID único
+        }
+        if (typeof task.historyLogged === 'undefined') {
+            task.historyLogged = false;
+        }
+        return task;
+    });
+    return tasks;
 }
 
 function saveTasksToStorage(tasks) {
@@ -41,11 +52,13 @@ function addTask() {
     }
 
     const task = {
+        id: Date.now() + Math.random(), // ID único criado na primeira vez
         text: taskText,
         priority: priority,
         dateDisplay: dateDisplay, 
         dateAdded: dateAdded,
-        completed: false
+        completed: false,
+        historyLogged: false // Controla se a tarefa já foi para o histórico
     };
 
     let tasks = getTasksFromStorage();
@@ -57,7 +70,7 @@ function addTask() {
     renderTasks();
 }
 
-// Função para mudar a prioridade (NOVA)
+// Função para mudar a prioridade
 function changePriority(index, newPriority) {
     let tasks = getTasksFromStorage();
     tasks[index].priority = newPriority;
@@ -81,12 +94,13 @@ function renderTasks() {
     taskList.innerHTML = ''; 
 
     tasks.forEach((task, index) => {
-        // Compatibilidade com tarefas antigas que só têm o campo 'date'
+        // Compatibilidade com tarefas antigas
         const dateStringForCalculation = task.dateAdded || task.date;
         const dateStringToDisplay = task.dateDisplay || task.date;
         let alertSymbol = '';
 
         // Lógica do Alerta de 15 dias
+        // Se não foi concluída E tiver data de criação (antigas tarefas sem dateAdded ainda usam 'date')
         if (!task.completed && dateStringForCalculation) {
             try {
                 const taskTime = new Date(dateStringForCalculation).getTime();
@@ -107,7 +121,7 @@ function renderTasks() {
         const li = document.createElement('li');
         li.className = classList;
 
-        // HTML do Seletor de prioridade (NOVO)
+        // HTML do Seletor de prioridade 
         const prioritySelectHTML = `
             <select class="task-priority-select" onchange="changePriority(${index}, this.value)">
                 <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
@@ -138,11 +152,11 @@ function toggleComplete(index) {
     let tasks = getTasksFromStorage();
     const task = tasks[index];
 
-    // Se estava incompleta e agora foi concluída
-    if (!task.completed) {
+    // Se a tarefa está sendo marcada como concluída PELA PRIMEIRA VEZ
+    if (!task.completed && !task.historyLogged) {
         addToHistory(task);
+        task.historyLogged = true; // Marca que ela já foi para o histórico
     } 
-    // Se estava concluída e agora foi reaberta (Ignora o histórico neste caso)
     
     task.completed = !task.completed;
     saveTasksToStorage(tasks);
@@ -159,7 +173,7 @@ function deleteTask(index) {
     }
 }
 
-// --- Funções de Histórico (NOVAS) ---
+// --- Funções de Histórico ---
 
 function getTodayKey() {
     const now = new Date();
@@ -174,14 +188,38 @@ function addToHistory(task) {
     if (!history[todayKey]) {
         history[todayKey] = [];
     }
-    // Adiciona uma cópia da tarefa ao histórico
+    
+    // Adiciona a tarefa ao histórico (só é chamada se historyLogged for false)
     history[todayKey].push({ 
+        id: task.id, 
         text: task.text, 
         completedAt: new Date().toLocaleTimeString('pt-BR'),
-        // Garante que não haja duplicatas exatas se o usuário marcar/desmarcar rápido
-        id: Date.now() 
+        // Um ID para a entrada do histórico, usado para exclusão manual
+        entryId: Date.now() + Math.random() 
     }); 
     saveHistoryToStorage(history);
+}
+
+// NOVA FUNÇÃO: Excluir uma entrada específica do histórico
+function deleteHistoryEntry(dateKey, entryId) {
+    if (!confirm('Tem certeza de que deseja remover esta entrada do histórico?')) {
+        return;
+    }
+    
+    const history = getHistoryFromStorage();
+    
+    if (history[dateKey]) {
+        // Filtra a lista de tarefas concluídas naquele dia, removendo a entrada com o ID correspondente
+        history[dateKey] = history[dateKey].filter(entry => entry.entryId != entryId);
+        
+        // Se a lista do dia ficou vazia, remove o dia inteiro do histórico
+        if (history[dateKey].length === 0) {
+            delete history[dateKey];
+        }
+        
+        saveHistoryToStorage(history);
+        displayHistory(); // Atualiza a exibição
+    }
 }
 
 function displayHistory() {
@@ -197,13 +235,24 @@ function displayHistory() {
     historyKeys.forEach(dateKey => {
         const tasks = history[dateKey];
         // Converte a chave da data (ex: 2025-10-20) para um formato legível
-        const dateReadable = new Date(dateKey).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const dateReadable = new Date(dateKey + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
+        let listItems = tasks.map(t => `
+            <li class="history-item-line">
+                [${t.completedAt}] ${t.text}
+                <button 
+                    class="delete-btn history-delete-btn" 
+                    onclick="deleteHistoryEntry('${dateKey}', ${t.entryId})">
+                    X
+                </button>
+            </li>
+        `).join('');
+
         let dayHTML = `
             <details>
                 <summary><strong>${dateReadable} (${tasks.length} concluída${tasks.length === 1 ? '' : 's'})</strong></summary>
                 <ul>
-                    ${tasks.map(t => `<li>[${t.completedAt}] ${t.text}</li>`).join('')}
+                    ${listItems}
                 </ul>
             </details>
         `;
