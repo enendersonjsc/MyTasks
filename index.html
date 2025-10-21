@@ -12,6 +12,12 @@
     <div class="container">
         <h1>MyTasks</h1>
         
+        <div class="stats-bar">
+            <div id="count-alta" class="priority-count count-alta">Alta: 0</div>
+            <div id="count-media" class="priority-count count-media">Média: 0</div>
+            <div id="count-baixa" class="priority-count count-baixa">Baixa: 0</div>
+            <button id="clear-completed-btn" onclick="clearCompletedTasks()">Limpar Concluídas</button>
+        </div>
         <div class="input-area">
             <input type="text" id="task-input" placeholder="Adicione uma nova tarefa...">
             <select id="priority-select">
