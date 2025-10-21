@@ -8,7 +8,6 @@ const HISTORY_KEY = 'todoHistory';
 
 function getTasksFromStorage() {
     const tasksJson = localStorage.getItem('todoTasks');
-    // Garante que todas as tarefas, mesmo as antigas, tenham um ID e historyLogged
     let tasks = tasksJson ? JSON.parse(tasksJson) : [];
     tasks = tasks.map(task => {
         if (!task.id) {
@@ -33,6 +32,58 @@ function getHistoryFromStorage() {
 
 function saveHistoryToStorage(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+// --- NOVAS FUNÇÕES: CONTADORES E LIMPEZA ---
+
+function updatePriorityCounts(tasks) {
+    let alta = 0;
+    let media = 0;
+    let baixa = 0;
+    let completedCount = 0;
+
+    tasks.forEach(task => {
+        if (!task.completed) { // Conta apenas tarefas PENDENTES
+            switch (task.priority) {
+                case 'alta':
+                    alta++;
+                    break;
+                case 'media':
+                    media++;
+                    break;
+                case 'baixa':
+                    baixa++;
+                    break;
+            }
+        } else {
+            completedCount++;
+        }
+    });
+
+    document.getElementById('count-alta').textContent = `Alta: ${alta}`;
+    document.getElementById('count-media').textContent = `Média: ${media}`;
+    document.getElementById('count-baixa').textContent = `Baixa: ${baixa}`;
+    
+    // Configura o Botão de Limpeza
+    const clearBtn = document.getElementById('clear-completed-btn');
+    if (clearBtn) {
+        clearBtn.disabled = completedCount === 0;
+        clearBtn.textContent = `Limpar Concluídas (${completedCount})`;
+    }
+}
+
+function clearCompletedTasks() {
+    if (!confirm('Tem certeza de que deseja remover TODAS as tarefas concluídas da sua lista ativa?')) {
+        return;
+    }
+
+    let tasks = getTasksFromStorage();
+    
+    // Filtra: mantém apenas as tarefas que NÃO estão concluídas
+    tasks = tasks.filter(task => !task.completed); 
+    
+    saveTasksToStorage(tasks);
+    renderTasks(); // Re-renderiza a lista (agora limpa)
 }
 
 // --- Lógica Principal de Adicionar e Renderizar ---
@@ -70,7 +121,6 @@ function addTask() {
     renderTasks();
 }
 
-// Função para mudar a prioridade
 function changePriority(index, newPriority) {
     let tasks = getTasksFromStorage();
     tasks[index].priority = newPriority;
@@ -81,6 +131,9 @@ function changePriority(index, newPriority) {
 function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
+
+    // 1. ATUALIZA OS CONTADORES ANTES DA ORDENAÇÃO
+    updatePriorityCounts(tasks); 
 
     const priorityOrder = { 'alta': 3, 'media': 2, 'baixa': 1 };
 
@@ -94,13 +147,11 @@ function renderTasks() {
     taskList.innerHTML = ''; 
 
     tasks.forEach((task, index) => {
-        // Compatibilidade com tarefas antigas
         const dateStringForCalculation = task.dateAdded || task.date;
         const dateStringToDisplay = task.dateDisplay || task.date;
         let alertSymbol = '';
 
         // Lógica do Alerta de 15 dias
-        // Se não foi concluída E tiver data de criação (antigas tarefas sem dateAdded ainda usam 'date')
         if (!task.completed && dateStringForCalculation) {
             try {
                 const taskTime = new Date(dateStringForCalculation).getTime();
@@ -152,16 +203,15 @@ function toggleComplete(index) {
     let tasks = getTasksFromStorage();
     const task = tasks[index];
 
-    // Se a tarefa está sendo marcada como concluída PELA PRIMEIRA VEZ
     if (!task.completed && !task.historyLogged) {
         addToHistory(task);
-        task.historyLogged = true; // Marca que ela já foi para o histórico
+        task.historyLogged = true; 
     } 
     
     task.completed = !task.completed;
     saveTasksToStorage(tasks);
     renderTasks();
-    displayHistory(); // Atualiza a exibição do histórico
+    displayHistory(); 
 }
 
 function deleteTask(index) {
@@ -177,7 +227,6 @@ function deleteTask(index) {
 
 function getTodayKey() {
     const now = new Date();
-    // Formato: 2025-10-20 (ANO-MÊS-DIA)
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 }
 
@@ -189,18 +238,15 @@ function addToHistory(task) {
         history[todayKey] = [];
     }
     
-    // Adiciona a tarefa ao histórico (só é chamada se historyLogged for false)
     history[todayKey].push({ 
         id: task.id, 
         text: task.text, 
         completedAt: new Date().toLocaleTimeString('pt-BR'),
-        // Um ID para a entrada do histórico, usado para exclusão manual
         entryId: Date.now() + Math.random() 
     }); 
     saveHistoryToStorage(history);
 }
 
-// NOVA FUNÇÃO: Excluir uma entrada específica do histórico
 function deleteHistoryEntry(dateKey, entryId) {
     if (!confirm('Tem certeza de que deseja remover esta entrada do histórico?')) {
         return;
@@ -209,16 +255,14 @@ function deleteHistoryEntry(dateKey, entryId) {
     const history = getHistoryFromStorage();
     
     if (history[dateKey]) {
-        // Filtra a lista de tarefas concluídas naquele dia, removendo a entrada com o ID correspondente
         history[dateKey] = history[dateKey].filter(entry => entry.entryId != entryId);
         
-        // Se a lista do dia ficou vazia, remove o dia inteiro do histórico
         if (history[dateKey].length === 0) {
             delete history[dateKey];
         }
         
         saveHistoryToStorage(history);
-        displayHistory(); // Atualiza a exibição
+        displayHistory(); 
     }
 }
 
@@ -227,14 +271,12 @@ function displayHistory() {
     if (!historyContainer) return;
 
     const history = getHistoryFromStorage();
-    const historyKeys = Object.keys(history).sort().reverse(); // Ordena do mais novo para o mais antigo
+    const historyKeys = Object.keys(history).sort().reverse(); 
 
     historyContainer.innerHTML = '<h3>Histórico de Conclusões:</h3>';
     
-    // Itera por todos os dias no histórico
     historyKeys.forEach(dateKey => {
         const tasks = history[dateKey];
-        // Converte a chave da data (ex: 2025-10-20) para um formato legível
         const dateReadable = new Date(dateKey + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
         let listItems = tasks.map(t => `
@@ -263,5 +305,5 @@ function displayHistory() {
 // Carrega as tarefas salvas quando a página é aberta
 document.addEventListener('DOMContentLoaded', () => {
     renderTasks();
-    displayHistory(); // Carrega e exibe o histórico
+    displayHistory(); 
 });
