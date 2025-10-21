@@ -22,7 +22,63 @@ h1 {
     font-weight: 700;
 }
 
-/* Área de Input e Botão */
+/* --- Estilos para a Barra de Estatísticas e Botão de Limpeza (NOVOS) --- */
+
+.stats-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding: 10px 0;
+    border-bottom: 1px solid #333; /* Linha divisória */
+    flex-wrap: wrap; /* Garante que se ajusta em telas menores */
+}
+
+.priority-count {
+    padding: 8px 15px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9em;
+    color: #e0e0e0;
+}
+
+/* Cores dos Contadores (para se destacarem) */
+.count-alta {
+    background-color: #331f1f;
+    border: 1px solid #ff5252;
+}
+
+.count-media {
+    background-color: #33301f;
+    border: 1px solid #ffc107;
+}
+
+.count-baixa {
+    background-color: #1f2533;
+    border: 1px solid #4a90e2;
+}
+
+#clear-completed-btn {
+    padding: 8px 15px;
+    background-color: #555; /* Botão neutro */
+    color: #eee;
+    font-size: 0.9em;
+    transition: background-color 0.3s;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#clear-completed-btn:hover {
+    background-color: #777;
+}
+
+#clear-completed-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Área de Input e Botão --- */
 .input-area {
     display: flex;
     gap: 10px;
@@ -115,7 +171,7 @@ button:hover {
     color: #999;
 }
 
-/* Novo: Seletor de prioridade na lista */
+/* Seletor de prioridade na lista */
 .task-priority-select {
     padding: 5px;
     border: 1px solid #444;
@@ -185,7 +241,23 @@ button:hover {
     border-top: 1px solid #333;
 }
 
-.history-container li {
+/* Estilo para o botão de exclusão manual no Histórico */
+.history-delete-btn {
+    font-size: 0.8em;
+    padding: 0 5px;
+    margin-left: 10px;
+    color: #ff5252;
+}
+
+.history-delete-btn:hover {
+    color: #cc0000;
+}
+
+/* Garante que o item da lista do histórico seja flexível para alinhar o botão X */
+.history-container ul li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 5px 0;
     color: #bbb;
     font-size: 0.9em;
