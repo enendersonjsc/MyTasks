@@ -4,6 +4,9 @@ const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 // Chave para o histórico diário
 const HISTORY_KEY = 'todoHistory';
 
+// Variável Global para o Filtro (padrão: todas)
+let currentFilter = 'all'; 
+
 // --- Funções de Storage ---
 
 function getTasksFromStorage() {
@@ -34,7 +37,13 @@ function saveHistoryToStorage(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
-// --- NOVAS FUNÇÕES: CONTADORES E LIMPEZA ---
+// --- Funções de Filtro, Edição e Utilitárias ---
+
+// Função para definir o filtro atual e re-renderizar
+function setFilter(newFilter) {
+    currentFilter = newFilter;
+    renderTasks();
+}
 
 function updatePriorityCounts(tasks) {
     let alta = 0;
@@ -79,11 +88,30 @@ function clearCompletedTasks() {
 
     let tasks = getTasksFromStorage();
     
-    // Filtra: mantém apenas as tarefas que NÃO estão concluídas
+    // Mantém apenas as tarefas que NÃO estão concluídas
     tasks = tasks.filter(task => !task.completed); 
     
     saveTasksToStorage(tasks);
-    renderTasks(); // Re-renderiza a lista (agora limpa)
+    renderTasks(); 
+}
+
+// NOVO: Salva o texto editado
+function saveTaskText(index, newText) {
+    let tasks = getTasksFromStorage();
+    
+    // Garantir que a indexação está correta
+    if (index < 0 || index >= tasks.length) return;
+    
+    // Garante que o texto não esteja vazio
+    if (newText.trim() === '') {
+        alert('O texto da tarefa não pode estar vazio. Edição cancelada.');
+        renderTasks();
+        return;
+    }
+    
+    tasks[index].text = newText.trim();
+    saveTasksToStorage(tasks);
+    renderTasks();
 }
 
 // --- Lógica Principal de Adicionar e Renderizar ---
@@ -103,13 +131,13 @@ function addTask() {
     }
 
     const task = {
-        id: Date.now() + Math.random(), // ID único criado na primeira vez
+        id: Date.now() + Math.random(), 
         text: taskText,
         priority: priority,
         dateDisplay: dateDisplay, 
         dateAdded: dateAdded,
         completed: false,
-        historyLogged: false // Controla se a tarefa já foi para o histórico
+        historyLogged: false 
     };
 
     let tasks = getTasksFromStorage();
@@ -132,21 +160,37 @@ function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
 
-    // 1. ATUALIZA OS CONTADORES ANTES DA ORDENAÇÃO
+    // 1. ATUALIZA OS CONTADORES
     updatePriorityCounts(tasks); 
 
+    // 2. APLICA O FILTRO
+    let filteredTasks = tasks.filter(task => {
+        // Se o filtro é 'all' OU se a tarefa está concluída, ela é exibida
+        if (currentFilter === 'all' || task.completed) {
+            return true;
+        }
+        // Caso contrário, filtra pela prioridade pendente
+        return task.priority === currentFilter;
+    });
+    
+    // 3. ORDENAÇÃO
     const priorityOrder = { 'alta': 3, 'media': 2, 'baixa': 1 };
 
-    tasks.sort((a, b) => {
+    filteredTasks.sort((a, b) => {
+        // Tarefas Concluídas vão para o final
         if (a.completed && !b.completed) return 1;
         if (!a.completed && b.completed) return -1;
         
+        // Ordena por Prioridade (alta > media > baixa)
         return priorityOrder[b.priority] - priorityOrder[a.priority];
     });
 
     taskList.innerHTML = ''; 
 
-    tasks.forEach((task, index) => {
+    filteredTasks.forEach((task) => {
+        // Encontra o índice da tarefa original na lista COMPLETA (necessário para salvar a edição)
+        const originalIndex = tasks.findIndex(t => t.id === task.id);
+        
         const dateStringForCalculation = task.dateAdded || task.date;
         const dateStringToDisplay = task.dateDisplay || task.date;
         let alertSymbol = '';
@@ -163,7 +207,6 @@ function renderTasks() {
             } catch (e) {}
         }
         
-        // Aplica classes de cor e estado
         let classList = `task-item task-${task.priority}`;
         if (task.completed) {
             classList += ' task-completed';
@@ -172,23 +215,46 @@ function renderTasks() {
         const li = document.createElement('li');
         li.className = classList;
 
-        // HTML do Seletor de prioridade 
         const prioritySelectHTML = `
-            <select class="task-priority-select" onchange="changePriority(${index}, this.value)">
+            <select class="task-priority-select" onchange="changePriority(${originalIndex}, this.value)">
                 <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
                 <option value="media" ${task.priority === 'media' ? 'selected' : ''}>Média</option>
                 <option value="baixa" ${task.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
             </select>
         `;
+        
+        let taskTextHTML;
+        if (task.completed) {
+             // Se estiver concluída, exibe como texto simples (não editável)
+            taskTextHTML = `<span>${task.text}${alertSymbol}</span>`;
+        } else {
+            // Se estiver pendente, torna editável ao duplo clique
+            taskTextHTML = `
+                <span class="task-text" 
+                    ondblclick="
+                        // Substitui o span por um input
+                        const span = this;
+                        const originalText = span.textContent.replace(' ⚠️', '').trim().replace(/'/g, '&apos;').replace(/"/g, '&quot;');
+                        span.outerHTML = '<input type=\\'text\\' class=\\'edit-input\\' value=\\'' + originalText + '\\' onblur=\\'saveTaskText(${originalIndex}, this.value)\\' onkeydown=\\'if(event.key === \"Enter\") { saveTaskText(${originalIndex}, this.value); }\\'>"; 
+                        
+                        // Garante que o foco seja aplicado imediatamente (próximo ciclo do evento)
+                        setTimeout(() => { document.querySelector('.edit-input').focus(); }, 0);
+                    "
+                    title="Dê um clique duplo para editar">
+                    ${task.text}${alertSymbol}
+                </span>
+            `;
+        }
 
         // Conteúdo da tarefa
         li.innerHTML = `
             <div class="task-content">
-                <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="toggleComplete(${index})">
-                ${!task.completed ? prioritySelectHTML : ''} <span class="task-date">(${dateStringToDisplay})</span>
-                <span>${task.text}${alertSymbol}</span>
+                <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="toggleComplete(${originalIndex})">
+                ${!task.completed ? prioritySelectHTML : ''} 
+                <span class="task-date">(${dateStringToDisplay})</span>
+                ${taskTextHTML}
             </div>
-            <button class="delete-btn" onclick="deleteTask(${index})">X</button>
+            <button class="delete-btn" onclick="deleteTask(${originalIndex})">X</button>
         `;
 
         taskList.appendChild(li);
@@ -306,4 +372,10 @@ function displayHistory() {
 document.addEventListener('DOMContentLoaded', () => {
     renderTasks();
     displayHistory(); 
+    
+    // Garante que o filtro seja carregado no estado 'Todas as Tarefas' por padrão
+    const filterSelect = document.getElementById('filter-select');
+    if (filterSelect) {
+        filterSelect.value = currentFilter;
+    }
 });
