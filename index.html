@@ -18,15 +18,6 @@
             <div id="count-baixa" class="priority-count count-baixa">Baixa: 0</div>
             <button id="clear-completed-btn" onclick="clearCompletedTasks()">Limpar Concluídas</button>
         </div>
-        <div class="filter-area">
-            <label for="filter-select">Filtrar por Prioridade:</label>
-            <select id="filter-select" onchange="setFilter(this.value)">
-                <option value="all">Todas as Tarefas</option>
-                <option value="alta">Prioridade Alta</option>
-                <option value="media">Prioridade Média</option>
-                <option value="baixa">Prioridade Baixa</option>
-            </select>
-        </div>
         <div class="input-area">
             <input type="text" id="task-input" placeholder="Adicione uma nova tarefa...">
             <select id="priority-select">
