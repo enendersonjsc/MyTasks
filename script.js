@@ -104,8 +104,8 @@ function clearCompletedTasks() {
 function saveTaskText(index, newText) {
     let tasks = getTasksFromStorage();
     
-    // É importante encontrar a tarefa pelo ID para evitar erros de índice após filtragem
-    const taskToUpdate = tasks.find(t => t.id === tasks[index].id);
+    // É importante usar o índice, pois a função está sempre rodando a partir do índice da lista COMPLETA
+    const taskToUpdate = tasks[index];
 
     if (!taskToUpdate) return;
     
@@ -163,6 +163,7 @@ function changePriority(index, newPriority) {
     renderTasks();
 }
 
+// FUNÇÃO renderTasks CORRIGIDA COM CRIAÇÃO DE ELEMENTOS DOM
 function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
@@ -191,7 +192,7 @@ function renderTasks() {
     taskList.innerHTML = ''; 
 
     filteredTasks.forEach((task) => {
-        // Encontra o índice da tarefa original na lista COMPLETA (necessário para o toggleComplete, changePriority, saveTaskText e deleteTask)
+        // Encontra o índice da tarefa original na lista COMPLETA (necessário para as funções de alteração/deleção)
         const originalIndex = tasks.findIndex(t => t.id === task.id);
         
         const dateStringForCalculation = task.dateAdded || task.date;
@@ -215,63 +216,97 @@ function renderTasks() {
             classList += ' task-completed';
         }
         
+        // --- INÍCIO DA CRIAÇÃO DO ELEMENTO (DOM PURO) ---
         const li = document.createElement('li');
         li.className = classList;
-
-        const prioritySelectHTML = `
-            <select class="task-priority-select" onchange="changePriority(${originalIndex}, this.value)">
-                <option value="alta" ${task.priority === 'alta' ? 'selected' : ''}>Alta</option>
-                <option value="media" ${task.priority === 'media' ? 'selected' : ''}>Média</option>
-                <option value="baixa" ${task.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
-            </select>
-        `;
         
-        let taskTextHTML;
-        if (task.completed) {
-             // Se estiver concluída, exibe como texto simples (não editável)
-            taskTextHTML = `<span>${task.text}${alertSymbol}</span>`;
-        } else {
-            // CORREÇÃO: Usando template literal para simplificar o escape do JS do ondblclick
+        // --- 1. Botão de Excluir ---
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.textContent = 'X';
+        deleteBtn.onclick = () => deleteTask(originalIndex);
+        
+        // --- 2. Container Principal (task-content) ---
+        const taskContentDiv = document.createElement('div');
+        taskContentDiv.className = 'task-content';
+        
+        // --- 3. Checkbox ---
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = task.completed;
+        checkbox.onclick = () => toggleComplete(originalIndex);
+        taskContentDiv.appendChild(checkbox);
+        
+        // --- 4. Seletor de Prioridade ---
+        if (!task.completed) {
+            const prioritySelect = document.createElement('select');
+            prioritySelect.className = 'task-priority-select';
+            prioritySelect.onchange = (e) => changePriority(originalIndex, e.target.value);
             
-            // 1. Prepara a string de código JavaScript para a função 'ondblclick'
-            // O uso de barras invertidas triplas (\\') é necessário para que a string final dentro do atributo HTML seja renderizada corretamente.
-            const editScript = `
-                const span = this;
-                // 1.1 Limpa o texto original (remove o ⚠️ e faz escape para HTML)
-                const originalText = span.textContent.replace(' ⚠️', '').trim().replace(/'/g, '&apos;').replace(/"/g, '&quot;');
-                
-                // 1.2 Cria o elemento input. Note o escape: \\" para o HTML (outerHTML) e \\\\' para o JS (onblur/onkeydown)
-                span.outerHTML = '<input type=\\"text\\" class=\\"edit-input\\" value=\\"' + originalText + '\\" onblur=\\"saveTaskText(${originalIndex}, this.value)\\" onkeydown=\\"if(event.key === \\"Enter\\") { saveTaskText(${originalIndex}, this.value); }\\">'; 
-                
-                // 1.3 Garante o foco.
-                setTimeout(() => { 
-                    const inputEl = document.querySelector('.edit-input');
-                    if (inputEl) inputEl.focus(); 
-                }, 0);
-            `;
-            
-            // 2. Insere o código (editScript) no atributo ondblclick do SPAN
-            taskTextHTML = `
-                <span class="task-text" 
-                    ondblclick="${editScript.replace(/\n/g, ' ').trim()}"
-                    title="Dê um clique duplo para editar">
-                    ${task.text}${alertSymbol}
-                </span>
-            `;
+            ['alta', 'media', 'baixa'].forEach(p => {
+                const option = document.createElement('option');
+                option.value = p;
+                option.textContent = p.charAt(0).toUpperCase() + p.slice(1);
+                if (task.priority === p) option.selected = true;
+                prioritySelect.appendChild(option);
+            });
+            taskContentDiv.appendChild(prioritySelect);
         }
-
-        // Conteúdo da tarefa
-        li.innerHTML = `
-            <div class="task-content">
-                <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="toggleComplete(${originalIndex})">
-                ${!task.completed ? prioritySelectHTML : ''} 
-                <span class="task-date">(${dateStringToDisplay})</span>
-                ${taskTextHTML}
-            </div>
-            <button class="delete-btn" onclick="deleteTask(${originalIndex})">X</button>
-        `;
+        
+        // --- 5. Data ---
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'task-date';
+        dateSpan.textContent = `(${dateStringToDisplay})`;
+        taskContentDiv.appendChild(dateSpan);
+        
+        // --- 6. Texto da Tarefa (Com Lógica de Edição) ---
+        const textSpan = document.createElement('span');
+        textSpan.textContent = task.text + alertSymbol;
+        
+        if (task.completed) {
+            // Apenas texto
+            taskContentDiv.appendChild(textSpan);
+        } else {
+            // Edição Inline segura com addEventListener
+            textSpan.className = 'task-text';
+            textSpan.title = 'Dê um clique duplo para editar';
+            
+            textSpan.addEventListener('dblclick', function() {
+                // A referência "this" é o span que foi clicado
+                const currentSpan = this;
+                const originalText = task.text;
+                
+                // Cria o input
+                const editInput = document.createElement('input');
+                editInput.type = 'text';
+                editInput.className = 'edit-input';
+                editInput.value = originalText;
+                
+                // Função de Salvar (passa o index original)
+                const save = () => saveTaskText(originalIndex, editInput.value);
+                
+                // Substitui o span pelo input
+                taskContentDiv.replaceChild(editInput, currentSpan);
+                editInput.focus();
+                
+                // Salvar ao clicar fora (onblur) ou apertar Enter
+                editInput.onblur = save;
+                editInput.onkeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); 
+                        save();
+                    }
+                };
+            });
+            taskContentDiv.appendChild(textSpan);
+        }
+        
+        // --- 7. Montagem Final do LI ---
+        li.appendChild(taskContentDiv);
+        li.appendChild(deleteBtn);
 
         taskList.appendChild(li);
+        // --- FIM DA CRIAÇÃO DO ELEMENTO ---
     });
 
     saveTasksToStorage(tasks); 
@@ -340,10 +375,8 @@ function deleteHistoryEntry(dateKey, entryId) {
     const history = getHistoryFromStorage();
     
     if (history[dateKey]) {
-        // Filtra a entrada a ser deletada pelo entryId (que é único para o histórico)
         history[dateKey] = history[dateKey].filter(entry => entry.entryId != entryId);
         
-        // Se a lista do dia ficar vazia, remove a chave do dia
         if (history[dateKey].length === 0) {
             delete history[dateKey];
         }
@@ -358,7 +391,6 @@ function displayHistory() {
     if (!historyContainer) return;
 
     const history = getHistoryFromStorage();
-    // Ordena as chaves de data (dias) do mais novo para o mais antigo
     const historyKeys = Object.keys(history).sort().reverse(); 
 
     historyContainer.innerHTML = '<h3>Histórico de Conclusões:</h3>';
