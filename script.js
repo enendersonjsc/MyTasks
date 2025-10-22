@@ -171,13 +171,10 @@ function renderTasks() {
     updatePriorityCounts(tasks); 
 
     // 2. APLICA O FILTRO
-    // O filtro ignora tarefas concluídas, mostrando-as sempre, mas filtra as pendentes.
     let filteredTasks = tasks.filter(task => {
-        // Se o filtro é 'all' OU se a tarefa está concluída, ela é exibida
         if (currentFilter === 'all' || task.completed) {
             return true;
         }
-        // Caso contrário, filtra pela prioridade pendente
         return task.priority === currentFilter;
     });
     
@@ -185,11 +182,9 @@ function renderTasks() {
     const priorityOrder = { 'alta': 3, 'media': 2, 'baixa': 1 };
 
     filteredTasks.sort((a, b) => {
-        // Tarefas Concluídas vão para o final
         if (a.completed && !b.completed) return 1;
         if (!a.completed && b.completed) return -1;
         
-        // Se as duas têm o mesmo status (ambas pendentes ou ambas concluídas), ordena por Prioridade
         return priorityOrder[b.priority] - priorityOrder[a.priority];
     });
 
@@ -236,25 +231,29 @@ function renderTasks() {
              // Se estiver concluída, exibe como texto simples (não editável)
             taskTextHTML = `<span>${task.text}${alertSymbol}</span>`;
         } else {
-            // Se estiver pendente, torna editável ao duplo clique.
-            // A sintaxe aqui é complexa devido ao escape de aspas.
-            // O uso de 'replace' e 'setTimeout' é vital para o funcionamento.
+            // CORREÇÃO: Usando template literal para simplificar o escape do JS do ondblclick
+            
+            // 1. Prepara a string de código JavaScript para a função 'ondblclick'
+            // O uso de barras invertidas triplas (\\') é necessário para que a string final dentro do atributo HTML seja renderizada corretamente.
+            const editScript = `
+                const span = this;
+                // 1.1 Limpa o texto original (remove o ⚠️ e faz escape para HTML)
+                const originalText = span.textContent.replace(' ⚠️', '').trim().replace(/'/g, '&apos;').replace(/"/g, '&quot;');
+                
+                // 1.2 Cria o elemento input. Note o escape: \\" para o HTML (outerHTML) e \\\\' para o JS (onblur/onkeydown)
+                span.outerHTML = '<input type=\\"text\\" class=\\"edit-input\\" value=\\"' + originalText + '\\" onblur=\\"saveTaskText(${originalIndex}, this.value)\\" onkeydown=\\"if(event.key === \\"Enter\\") { saveTaskText(${originalIndex}, this.value); }\\">'; 
+                
+                // 1.3 Garante o foco.
+                setTimeout(() => { 
+                    const inputEl = document.querySelector('.edit-input');
+                    if (inputEl) inputEl.focus(); 
+                }, 0);
+            `;
+            
+            // 2. Insere o código (editScript) no atributo ondblclick do SPAN
             taskTextHTML = `
                 <span class="task-text" 
-                    ondblclick="
-                        // 1. Pega o span atual (this) e o texto, removendo o ⚠️ se existir.
-                        const span = this;
-                        const originalText = span.textContent.replace(' ⚠️', '').trim().replace(/'/g, '&apos;').replace(/"/g, '&quot;');
-                        
-                        // 2. Cria o novo elemento input com as funções de salvar (onblur e onkeydown)
-                        span.outerHTML = '<input type=\\'text\\' class=\\'edit-input\\' value=\\'' + originalText + '\\' onblur=\\'saveTaskText(${originalIndex}, this.value)\\' onkeydown=\\'if(event.key === \"Enter\") { saveTaskText(${originalIndex}, this.value); }\\'>"; 
-                        
-                        // 3. Garante que o foco seja aplicado imediatamente no input recém-criado.
-                        setTimeout(() => { 
-                            const inputEl = document.querySelector('.edit-input');
-                            if (inputEl) inputEl.focus(); 
-                        }, 0);
-                    "
+                    ondblclick="${editScript.replace(/\n/g, ' ').trim()}"
                     title="Dê um clique duplo para editar">
                     ${task.text}${alertSymbol}
                 </span>
@@ -284,7 +283,6 @@ function toggleComplete(index) {
     let tasks = getTasksFromStorage();
     const task = tasks[index];
 
-    // Verifica se a tarefa está sendo concluída e se ainda não foi registrada
     if (!task.completed && !task.historyLogged) {
         addToHistory(task);
         task.historyLogged = true; 
@@ -321,7 +319,6 @@ function addToHistory(task) {
         history[todayKey] = [];
     }
     
-    // Verifica se a tarefa já está no histórico (usa o ID da tarefa para evitar duplicatas)
     const exists = history[todayKey].some(entry => entry.id === task.id);
 
     if (!exists) {
@@ -369,7 +366,6 @@ function displayHistory() {
     historyKeys.forEach(dateKey => {
         const tasks = history[dateKey];
         
-        // Cria um objeto Date seguro para a data (formato YYYY-MM-DD)
         const dateReadable = new Date(dateKey + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
         let listItems = tasks.map(t => `
