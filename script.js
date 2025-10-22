@@ -41,11 +41,10 @@ function saveHistoryToStorage(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
-// --- Funções Utilitárias para Data (NOVO) ---
+// --- Funções Utilitárias para Data ---
 
 function formatDate(dateStr) {
     if (!dateStr) return '';
-    // Adiciona T00:00:00 para garantir que a data seja interpretada em UTC, evitando problemas de fuso horário
     const date = new Date(dateStr + 'T00:00:00'); 
     return date.toLocaleDateString('pt-BR');
 }
@@ -138,11 +137,11 @@ function saveTaskText(index, newText) {
 function addTask() {
     const input = document.getElementById('task-input');
     const prioritySelect = document.getElementById('priority-select');
-    const dueDateInput = document.getElementById('due-date-input'); // NOVO: Campo de Data
+    const dueDateInput = document.getElementById('due-date-input'); 
     
     const taskText = input.value.trim();
     const priority = prioritySelect.value;
-    const dueDate = dueDateInput.value; // Coleta a data limite (string vazia se não selecionada)
+    const dueDate = dueDateInput.value; 
 
     const dateDisplay = new Date().toLocaleDateString('pt-BR');
     const dateAdded = new Date().toISOString(); 
@@ -160,7 +159,7 @@ function addTask() {
         dateAdded: dateAdded,
         completed: false,
         historyLogged: false,
-        dueDate: dueDate // SALVA A DATA LIMITE (OPCIONAL)
+        dueDate: dueDate 
     };
 
     let tasks = getTasksFromStorage();
@@ -180,7 +179,7 @@ function changePriority(index, newPriority) {
     renderTasks();
 }
 
-// FUNÇÃO renderTasks COM DOM PURO E LÓGICA DE DATA LIMITE
+// FUNÇÃO renderTasks COM DOM PURO E LÓGICA DE DATA LIMITE CORRIGIDA
 function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
@@ -231,9 +230,8 @@ function renderTasks() {
             } catch (e) {}
         }
         
-        // Lógica do Alerta de Data Limite (NOVO)
+        // Lógica do Alerta de Data Limite (Corrigida para icone final)
         if (!task.completed && task.dueDate) {
-            // Cria timestamp da data limite na meia-noite (para comparação justa)
             const dueDateTimestamp = new Date(task.dueDate + 'T00:00:00').setHours(0, 0, 0, 0);
             
             if (dueDateTimestamp < today) {
@@ -247,7 +245,7 @@ function renderTasks() {
             }
         }
         
-        let classList = `task-item task-${task.priority} ${dueClass}`; // ADICIONA A CLASSE DUE
+        let classList = `task-item task-${task.priority} ${dueClass}`; 
         if (task.completed) {
             classList += ' task-completed';
         }
@@ -295,20 +293,30 @@ function renderTasks() {
         creationDateSpan.textContent = `(Criada em: ${dateStringToDisplay})`;
         taskContentDiv.appendChild(creationDateSpan);
         
-        // --- 6. Data Limite (NOVO) ---
+        // --- 6. Texto da Tarefa (Com Lógica de Edição) ---
+        const textSpan = document.createElement('span');
+        // O texto principal da tarefa
+        textSpan.textContent = task.text; 
+        
+        if (!task.completed) {
+             // Adiciona o ícone de alerta (15 dias ou prazo) ao final do texto, apenas se houver ícone
+            if (alertSymbol.trim() !== '') {
+                const alertNode = document.createTextNode(alertSymbol);
+                textSpan.appendChild(alertNode);
+            }
+        }
+        
+        // --- 7. Data Limite (NOVO) - ANEXADA AO FINAL DO TEXTO ---
         if (task.dueDate) {
             const dueDateSpan = document.createElement('span');
             dueDateSpan.className = 'due-date';
             dueDateSpan.textContent = `Prazo: ${formatDate(task.dueDate)}`;
-            taskContentDiv.appendChild(dueDateSpan);
+            // ANEXA A DATA LIMITE DENTRO DO SPAN DO TEXTO
+            textSpan.appendChild(dueDateSpan); 
         }
-        
-        // --- 7. Texto da Tarefa (Com Lógica de Edição) ---
-        const textSpan = document.createElement('span');
-        textSpan.textContent = task.text + alertSymbol;
-        
+
         if (task.completed) {
-            // Apenas texto
+            // Se estiver concluída, anexa o texto e a data limite ao container
             taskContentDiv.appendChild(textSpan);
         } else {
             // Edição Inline segura com addEventListener
@@ -324,7 +332,6 @@ function renderTasks() {
                 editInput.className = 'edit-input';
                 editInput.value = originalText;
                 
-                // Função de Salvar (passa o index original)
                 const save = () => saveTaskText(originalIndex, editInput.value);
                 
                 taskContentDiv.replaceChild(editInput, currentSpan);
@@ -351,7 +358,7 @@ function renderTasks() {
     saveTasksToStorage(tasks); 
 }
 
-// --- Lógica de Conclusão e Histórico ---
+// --- Lógica de Conclusão e Histórico (restante do código) ---
 
 function toggleComplete(index) {
     let tasks = getTasksFromStorage();
