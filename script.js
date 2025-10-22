@@ -19,6 +19,10 @@ function getTasksFromStorage() {
         if (typeof task.historyLogged === 'undefined') {
             task.historyLogged = false;
         }
+        // Garante que o campo dueDate exista (útil para tarefas antigas)
+        if (typeof task.dueDate === 'undefined') {
+            task.dueDate = ''; 
+        }
         return task;
     });
     return tasks;
@@ -35,6 +39,15 @@ function getHistoryFromStorage() {
 
 function saveHistoryToStorage(history) {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+}
+
+// --- Funções Utilitárias para Data (NOVO) ---
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    // Adiciona T00:00:00 para garantir que a data seja interpretada em UTC, evitando problemas de fuso horário
+    const date = new Date(dateStr + 'T00:00:00'); 
+    return date.toLocaleDateString('pt-BR');
 }
 
 // --- Funções de Filtro, Edição e Utilitárias ---
@@ -104,7 +117,6 @@ function clearCompletedTasks() {
 function saveTaskText(index, newText) {
     let tasks = getTasksFromStorage();
     
-    // É importante usar o índice, pois a função está sempre rodando a partir do índice da lista COMPLETA
     const taskToUpdate = tasks[index];
 
     if (!taskToUpdate) return;
@@ -126,9 +138,12 @@ function saveTaskText(index, newText) {
 function addTask() {
     const input = document.getElementById('task-input');
     const prioritySelect = document.getElementById('priority-select');
+    const dueDateInput = document.getElementById('due-date-input'); // NOVO: Campo de Data
+    
     const taskText = input.value.trim();
     const priority = prioritySelect.value;
-    
+    const dueDate = dueDateInput.value; // Coleta a data limite (string vazia se não selecionada)
+
     const dateDisplay = new Date().toLocaleDateString('pt-BR');
     const dateAdded = new Date().toISOString(); 
 
@@ -144,7 +159,8 @@ function addTask() {
         dateDisplay: dateDisplay, 
         dateAdded: dateAdded,
         completed: false,
-        historyLogged: false 
+        historyLogged: false,
+        dueDate: dueDate // SALVA A DATA LIMITE (OPCIONAL)
     };
 
     let tasks = getTasksFromStorage();
@@ -152,6 +168,7 @@ function addTask() {
     saveTasksToStorage(tasks);
 
     input.value = '';
+    dueDateInput.value = ''; // Limpa o campo de data após adicionar
 
     renderTasks();
 }
@@ -163,7 +180,7 @@ function changePriority(index, newPriority) {
     renderTasks();
 }
 
-// FUNÇÃO renderTasks CORRIGIDA COM CRIAÇÃO DE ELEMENTOS DOM
+// FUNÇÃO renderTasks COM DOM PURO E LÓGICA DE DATA LIMITE
 function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
@@ -191,15 +208,18 @@ function renderTasks() {
 
     taskList.innerHTML = ''; 
 
+    // Pega a meia-noite de hoje para comparação de prazos
+    const today = new Date().setHours(0, 0, 0, 0); 
+
     filteredTasks.forEach((task) => {
-        // Encontra o índice da tarefa original na lista COMPLETA (necessário para as funções de alteração/deleção)
         const originalIndex = tasks.findIndex(t => t.id === task.id);
         
         const dateStringForCalculation = task.dateAdded || task.date;
         const dateStringToDisplay = task.dateDisplay || task.date;
         let alertSymbol = '';
+        let dueClass = ''; // Classe CSS para alerta de prazo
 
-        // Lógica do Alerta de 15 dias
+        // Lógica do Alerta de 15 dias (tarefa antiga)
         if (!task.completed && dateStringForCalculation) {
             try {
                 const taskTime = new Date(dateStringForCalculation).getTime();
@@ -211,7 +231,23 @@ function renderTasks() {
             } catch (e) {}
         }
         
-        let classList = `task-item task-${task.priority}`;
+        // Lógica do Alerta de Data Limite (NOVO)
+        if (!task.completed && task.dueDate) {
+            // Cria timestamp da data limite na meia-noite (para comparação justa)
+            const dueDateTimestamp = new Date(task.dueDate + 'T00:00:00').setHours(0, 0, 0, 0);
+            
+            if (dueDateTimestamp < today) {
+                // Prazo Expirado (Atrasado)
+                dueClass = 'due-expired';
+                alertSymbol = ' ❌ ' + alertSymbol; 
+            } else if (dueDateTimestamp === today) {
+                // Prazo Hoje
+                dueClass = 'due-near';
+                alertSymbol = ' 🔔 ' + alertSymbol;
+            }
+        }
+        
+        let classList = `task-item task-${task.priority} ${dueClass}`; // ADICIONA A CLASSE DUE
         if (task.completed) {
             classList += ' task-completed';
         }
@@ -253,13 +289,21 @@ function renderTasks() {
             taskContentDiv.appendChild(prioritySelect);
         }
         
-        // --- 5. Data ---
-        const dateSpan = document.createElement('span');
-        dateSpan.className = 'task-date';
-        dateSpan.textContent = `(${dateStringToDisplay})`;
-        taskContentDiv.appendChild(dateSpan);
+        // --- 5. Data de Criação ---
+        const creationDateSpan = document.createElement('span');
+        creationDateSpan.className = 'task-date';
+        creationDateSpan.textContent = `(Criada em: ${dateStringToDisplay})`;
+        taskContentDiv.appendChild(creationDateSpan);
         
-        // --- 6. Texto da Tarefa (Com Lógica de Edição) ---
+        // --- 6. Data Limite (NOVO) ---
+        if (task.dueDate) {
+            const dueDateSpan = document.createElement('span');
+            dueDateSpan.className = 'due-date';
+            dueDateSpan.textContent = `Prazo: ${formatDate(task.dueDate)}`;
+            taskContentDiv.appendChild(dueDateSpan);
+        }
+        
+        // --- 7. Texto da Tarefa (Com Lógica de Edição) ---
         const textSpan = document.createElement('span');
         textSpan.textContent = task.text + alertSymbol;
         
@@ -272,11 +316,9 @@ function renderTasks() {
             textSpan.title = 'Dê um clique duplo para editar';
             
             textSpan.addEventListener('dblclick', function() {
-                // A referência "this" é o span que foi clicado
                 const currentSpan = this;
                 const originalText = task.text;
                 
-                // Cria o input
                 const editInput = document.createElement('input');
                 editInput.type = 'text';
                 editInput.className = 'edit-input';
@@ -285,11 +327,9 @@ function renderTasks() {
                 // Função de Salvar (passa o index original)
                 const save = () => saveTaskText(originalIndex, editInput.value);
                 
-                // Substitui o span pelo input
                 taskContentDiv.replaceChild(editInput, currentSpan);
                 editInput.focus();
                 
-                // Salvar ao clicar fora (onblur) ou apertar Enter
                 editInput.onblur = save;
                 editInput.onkeydown = (e) => {
                     if (e.key === 'Enter') {
@@ -301,12 +341,11 @@ function renderTasks() {
             taskContentDiv.appendChild(textSpan);
         }
         
-        // --- 7. Montagem Final do LI ---
+        // --- 8. Montagem Final do LI ---
         li.appendChild(taskContentDiv);
         li.appendChild(deleteBtn);
 
         taskList.appendChild(li);
-        // --- FIM DA CRIAÇÃO DO ELEMENTO ---
     });
 
     saveTasksToStorage(tasks); 
