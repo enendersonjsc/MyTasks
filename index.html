@@ -1,48 +1,56 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyTasks - Gerenciador de Tarefas</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <div class="container">
+    <header>
         <h1>MyTasks</h1>
-        
-        <div class="stats-bar">
-            <div id="count-alta" class="priority-count count-alta">Alta: 0</div>
-            <div id="count-media" class="priority-count count-media">Média: 0</div>
-            <div id="count-baixa" class="priority-count count-baixa">Baixa: 0</div>
-            <button id="clear-completed-btn" onclick="clearCompletedTasks()">Limpar Concluídas</button>
-        </div>
-        <div class="filter-area">
-            <label for="filter-select">Filtrar por Prioridade:</label>
-            <select id="filter-select" onchange="setFilter(this.value)">
-                <option value="all">Todas as Tarefas</option>
-                <option value="alta">Prioridade Alta</option>
-                <option value="media">Prioridade Média</option>
-                <option value="baixa">Prioridade Baixa</option>
-            </select>
-        </div>
-        <div class="input-area">
-            <input type="text" id="task-input" placeholder="Adicione uma nova tarefa...">
+    </header>
+
+    <main>
+        <div id="input-area">
+            <input type="text" id="task-input" placeholder="Nova tarefa...">
+            
+            <input type="date" id="due-date-input" title="Data Limite (Opcional)">
+            
             <select id="priority-select">
-                <option value="alta">Prioridade ALTA (Vermelha)</option>
-                <option value="media">Prioridade Média (Amarela)</option>
-                <option value="baixa" selected>Prioridade Baixa (Azul)</option>
+                <option value="alta">Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
             </select>
             <button onclick="addTask()">Adicionar</button>
         </div>
 
+        <div id="controls-area">
+            <div id="priority-counts">
+                <span id="count-alta" class="priority-count count-alta">Alta: 0</span>
+                <span id="count-media" class="priority-count count-media">Média: 0</span>
+                <span id="count-baixa" class="priority-count count-baixa">Baixa: 0</span>
+            </div>
+
+            <div id="action-buttons">
+                <select id="filter-select" onchange="setFilter(this.value)">
+                    <option value="all">Mostrar Tudo</option>
+                    <option value="alta">Prioridade Alta</option>
+                    <option value="media">Prioridade Média</option>
+                    <option value="baixa">Prioridade Baixa</option>
+                </select>
+                <button id="clear-completed-btn" onclick="clearCompletedTasks()" disabled>Limpar Concluídas (0)</button>
+            </div>
+        </div>
+        
         <ul id="task-list">
             </ul>
-    </div>
-    
-    <div id="history-container" class="history-container">
-        </div>
+
+        <div id="history-container">
+            </div>
+    </main>
+
     <script src="script.js"></script>
 </body>
 </html>
