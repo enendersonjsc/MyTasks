@@ -22,7 +22,7 @@ h1 {
     font-weight: 700;
 }
 
-/* --- Estilos para a Barra de Estatísticas e Botão de Limpeza (NOVOS) --- */
+/* --- Estilos para a Barra de Estatísticas e Botão de Limpeza --- */
 
 .stats-bar {
     display: flex;
@@ -42,7 +42,7 @@ h1 {
     color: #e0e0e0;
 }
 
-/* Cores dos Contadores (para se destacarem) */
+/* Cores dos Contadores */
 .count-alta {
     background-color: #331f1f;
     border: 1px solid #ff5252;
@@ -60,7 +60,7 @@ h1 {
 
 #clear-completed-btn {
     padding: 8px 15px;
-    background-color: #555; /* Botão neutro */
+    background-color: #555; 
     color: #eee;
     font-size: 0.9em;
     transition: background-color 0.3s;
@@ -76,6 +76,29 @@ h1 {
 #clear-completed-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* --- Estilos para a Área de Filtro (NOVOS) --- */
+.filter-area {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.filter-area label {
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+#filter-select {
+    padding: 10px;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background-color: #2c2c2c;
+    color: #e0e0e0;
+    outline: none;
+    cursor: pointer;
 }
 
 /* --- Área de Input e Botão --- */
@@ -110,8 +133,8 @@ button {
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.3s;
     font-weight: 600;
+    transition: background-color 0.3s;
 }
 
 button:hover {
@@ -136,26 +159,26 @@ button:hover {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Cores das Prioridades (Ajustadas para Dark Mode) */
+/* Cores das Prioridades */
 .task-alta {
-    background-color: #331f1f; /* Fundo vermelho escuro */
-    border-left-color: #ff5252; /* Vermelho claro */
+    background-color: #331f1f; 
+    border-left-color: #ff5252; 
 }
 
 .task-media {
-    background-color: #33301f; /* Fundo amarelo escuro */
-    border-left-color: #ffc107; /* Amarelo */
+    background-color: #33301f; 
+    border-left-color: #ffc107; 
 }
 
 .task-baixa {
-    background-color: #1f2533; /* Fundo azul escuro */
-    border-left-color: #4a90e2; /* Azul moderno */
+    background-color: #1f2533; 
+    border-left-color: #4a90e2; 
 }
 
-/* Estilo de Conclusão (Cinza e Tachado) */
+/* Estilo de Conclusão */
 .task-completed {
     background-color: #252525;
-    border-left-color: #555; /* Cinza */
+    border-left-color: #555; 
     color: #888;
     text-decoration: line-through;
 }
@@ -163,7 +186,7 @@ button:hover {
 .task-content {
     display: flex;
     align-items: center;
-    gap: 10px; /* Ajustado o gap */
+    gap: 10px; 
 }
 
 .task-date {
@@ -171,18 +194,37 @@ button:hover {
     color: #999;
 }
 
+/* Edição Inline (Novo) */
+.task-text {
+    cursor: text;
+    padding: 2px 0;
+    display: inline-block;
+}
+
+.edit-input {
+    padding: 5px;
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    background-color: #333;
+    color: #e0e0e0;
+    font-size: 1em;
+    outline: none;
+    width: auto; /* Adapta-se ao conteúdo */
+}
+
+
 /* Seletor de prioridade na lista */
 .task-priority-select {
     padding: 5px;
     border: 1px solid #444;
     border-radius: 4px;
-    background-color: #333; /* Fundo mais escuro */
+    background-color: #333; 
     color: #e0e0e0;
     margin-right: 5px;
     font-size: 0.8em;
     cursor: pointer;
     outline: none;
-    appearance: none; /* Remove seta padrão em alguns browsers */
+    appearance: none; 
     text-align: center;
 }
 
@@ -202,12 +244,12 @@ button:hover {
     color: #cc0000;
 }
 
-/* Estilos para o Histórico Diário (Discreto) */
+/* Estilos para o Histórico Diário */
 .history-container {
     max-width: 800px;
     margin: 40px auto 20px;
     padding: 20px;
-    background: #1e1e1e; /* Mesmo fundo do container principal */
+    background: #1e1e1e; 
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
