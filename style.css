@@ -33,6 +33,84 @@ h1 {
     margin: 0;
 }
 
+/* ---------------------------------- */
+/* POMODORO TIMER STYLES */
+/* ---------------------------------- */
+#pomodoro-timer {
+    width: 100%;
+    max-width: 400px; /* Limita a largura do timer */
+    text-align: center;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #3c414c;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+#timer-display {
+    font-size: 4em;
+    font-weight: bold;
+    color: #61dafb; /* Cor principal do Timer */
+    margin-bottom: 15px;
+    padding: 10px 0;
+    transition: color 0.5s; 
+}
+
+#timer-controls button {
+    padding: 10px 20px;
+    margin: 5px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+#start-btn {
+    background-color: #2ecc71; /* Verde */
+    color: #1e1e1e;
+}
+#start-btn:hover:not(:disabled) { background-color: #27ae60; }
+
+#pause-btn {
+    background-color: #f39c12; /* Laranja */
+    color: #1e1e1e;
+}
+#pause-btn:hover:not(:disabled) { background-color: #d35400; }
+
+#reset-btn {
+    background-color: #e74c3c; /* Vermelho */
+    color: white;
+}
+#reset-btn:hover { background-color: #c0392b; }
+
+#timer-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#timer-status {
+    margin-top: 15px;
+    font-size: 1.1em;
+    color: #ccc;
+}
+
+/* Destaque para o status */
+#current-phase {
+    font-weight: bold;
+    color: #61dafb;
+    transition: color 0.5s;
+}
+
+/* Estilos dinâmicos para Foco e Descanso (Mudam a cor principal do timer) */
+.focus-mode #timer-display, .focus-mode #current-phase {
+    color: #e74c3c; /* Vermelho para FOCO */
+}
+
+.break-mode #timer-display, .break-mode #current-phase {
+    color: #2ecc71; /* Verde para DESCANSO */
+}
+
 /* Área de Input */
 #input-area {
     display: flex;
@@ -130,7 +208,6 @@ h1 {
     padding: 15px;
     margin-bottom: 10px;
     border-radius: 6px;
-    /* CORREÇÃO: Fundo colorido total removido, definido pelas classes task-alta/media/baixa */
     border-left: 5px solid;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: background-color 0.3s, opacity 0.3s;
@@ -138,7 +215,7 @@ h1 {
 
 /* Estilos de Fundo e Borda por Prioridade */
 .task-alta { 
-    background-color: #e74c3c22; /* Cor mais clara para o fundo */
+    background-color: #e74c3c22; 
     border-left-color: #e74c3c; 
 }
 .task-media { 
@@ -149,10 +226,6 @@ h1 {
     background-color: #2ecc7122; 
     border-left-color: #2ecc71; 
 }
-/* Se preferir a cor sólida como antes, use: 
-.task-alta { background-color: #e74c3c; border-left-color: #e74c3c; color: white; } 
-*/
-
 
 .task-content {
     display: flex;
@@ -183,7 +256,7 @@ h1 {
     padding: 2px 5px;
     border-radius: 3px;
     min-width: 150px; 
-    display: flex; /* Permite alinhar a data limite DENTRO do span */
+    display: flex; 
     align-items: center;
     flex-wrap: wrap;
 }
@@ -208,7 +281,7 @@ h1 {
 /* Tarefa Concluída */
 .task-completed {
     opacity: 0.7;
-    background-color: #343740 !important; /* Força o fundo cinza escuro */
+    background-color: #343740 !important; 
     text-decoration: line-through;
 }
 
@@ -232,11 +305,7 @@ h1 {
     color: #f96658;
 }
 
-/* ---------------------------------- */
 /* CLASSES DE ALERTA PARA DATA LIMITE */
-/* ---------------------------------- */
-
-/* Corrigido o fundo para ser sutil e sobrepor o fundo de prioridade */
 .task-item.due-expired {
     background-color: #583e41 !important; 
     border-left-color: #e74c3c !important; 
@@ -251,7 +320,7 @@ h1 {
 .due-date {
     font-size: 0.9em;
     font-weight: bold;
-    margin-left: 15px; /* Adiciona espaçamento após o texto principal */
+    margin-left: 15px; 
     padding: 3px 8px;
     border-radius: 4px;
     background-color: #555b66;
