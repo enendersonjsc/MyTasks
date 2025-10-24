@@ -12,6 +12,17 @@
         <h1>MyTasks</h1>
     </header>
 
+    <div id="pomodoro-timer">
+        <div id="timer-display">25:00</div>
+        <div id="timer-controls">
+            <button id="start-btn">Iniciar</button>
+            <button id="pause-btn" disabled>Pausar</button>
+            <button id="reset-btn">Resetar</button>
+        </div>
+        <div id="timer-status">
+            Ciclo: <span id="cycle-count">0</span> / 4 | Estado: <span id="current-phase">Pronto</span>
+        </div>
+    </div>
     <main>
         <div id="input-area">
             <input type="text" id="task-input" placeholder="Nova tarefa...">
