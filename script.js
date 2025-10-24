@@ -7,6 +7,168 @@ const HISTORY_KEY = 'todoHistory';
 // Variável Global para o Filtro (padrão: todas)
 let currentFilter = 'all'; 
 
+// =======================================================
+// === POMODORO TIMER LÓGICA ===
+// =======================================================
+let timerInterval;
+let timeRemaining;
+let isPaused = true;
+let currentPhase = 'pomodoro'; // 'pomodoro' ou 'short-break' ou 'long-break'
+let pomodoroCycles = 0; // Contagem de ciclos de 25 minutos
+
+const POMODORO_TIME = 25 * 60; // 25 minutos em segundos
+const SHORT_BREAK_TIME = 5 * 60;  // 5 minutos
+const LONG_BREAK_TIME = 15 * 60; // 15 minutos
+
+function resetTimerVariables() {
+    // Mantemos os ciclos, mas zeramos se o usuário apertar Reset total
+    if (pomodoroCycles >= 4) {
+         pomodoroCycles = 0;
+    }
+    currentPhase = 'pomodoro';
+    timeRemaining = POMODORO_TIME;
+    isPaused = true;
+}
+
+function updateDisplay() {
+    const minutes = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
+    const seconds = String(timeRemaining % 60).padStart(2, '0');
+    
+    const displayEl = document.getElementById('timer-display');
+    const statusEl = document.getElementById('current-phase');
+    const cycleEl = document.getElementById('cycle-count');
+    const body = document.body;
+
+    if (!displayEl || !statusEl || !cycleEl) return;
+
+    displayEl.textContent = `${minutes}:${seconds}`;
+    cycleEl.textContent = pomodoroCycles;
+    
+    // Atualiza status e classes de estilo
+    body.classList.remove('focus-mode', 'break-mode');
+    
+    if (currentPhase === 'pomodoro') {
+        statusEl.textContent = 'Foco (25 min)';
+        body.classList.add('focus-mode');
+    } else if (currentPhase === 'short-break') {
+        statusEl.textContent = 'Descanso Curto (5 min)';
+        body.classList.add('break-mode');
+    } else if (currentPhase === 'long-break') {
+        statusEl.textContent = 'Descanso Longo (15 min)';
+        body.classList.add('break-mode');
+    }
+
+    // Atualiza o título da página para notificação visual
+    document.title = `(${minutes}:${seconds}) MyTasks | ${statusEl.textContent}`;
+}
+
+function startTimer() {
+    if (!isPaused && timeRemaining > 0) return;
+    isPaused = false;
+    
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('pause-btn').disabled = false;
+    
+    // Se o timer estiver em 0 (após o handlePhaseEnd), inicia o próximo ciclo
+    if (timeRemaining <= 0) {
+        setNextPhase();
+    }
+    
+    timerInterval = setInterval(() => {
+        if (timeRemaining > 0) {
+            timeRemaining--;
+            updateDisplay();
+        } else {
+            clearInterval(timerInterval);
+            handlePhaseEnd();
+        }
+    }, 1000);
+}
+
+function pauseTimer() {
+    if (isPaused) return;
+    isPaused = true;
+    clearInterval(timerInterval);
+
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+}
+
+function resetTimer() {
+    pauseTimer();
+    // Zera TUDO
+    pomodoroCycles = 0;
+    resetTimerVariables();
+    updateDisplay();
+    
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+    document.title = 'MyTasks - Gerenciador de Tarefas';
+}
+
+function handlePhaseEnd() {
+    // Alerta o usuário quando o tempo acaba
+    alert(`Fim do ciclo de ${currentPhase === 'pomodoro' ? 'Foco' : 'Descanso'}! Começando o próximo.`); 
+    
+    // Configura a próxima fase, mas o startTimer() precisa ser chamado para começar o próximo ciclo
+    setNextPhase(); 
+    startTimer();
+}
+
+function setNextPhase() {
+    if (currentPhase === 'pomodoro') {
+        pomodoroCycles++;
+        
+        if (pomodoroCycles % 4 === 0) {
+            currentPhase = 'long-break';
+            timeRemaining = LONG_BREAK_TIME;
+        } else {
+            currentPhase = 'short-break';
+            timeRemaining = SHORT_BREAK_TIME;
+        }
+    } else {
+        // Volta para o Pomodoro após o descanso (curto ou longo)
+        currentPhase = 'pomodoro';
+        timeRemaining = POMODORO_TIME;
+    }
+    
+    // Notifica o usuário
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('MyTasks Pomodoro', {
+            body: `Começando a fase: ${document.getElementById('current-phase').textContent}`,
+            silent: false 
+        });
+    }
+    
+    updateDisplay();
+}
+
+// Inicialização dos Event Listeners do Timer (chamado no DOMContentLoaded)
+function initPomodoro() {
+    // Garante as variáveis iniciais
+    resetTimerVariables();
+    updateDisplay();
+
+    // Conexão dos botões
+    const startBtn = document.getElementById('start-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    
+    if (startBtn) startBtn.onclick = startTimer;
+    if (pauseBtn) pauseBtn.onclick = pauseTimer;
+    if (resetBtn) resetBtn.onclick = resetTimer;
+    
+    // Pede permissão de Notificações
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+    }
+}
+
+// =======================================================
+// === FIM DO BLOCO DO POMODORO TIMER ===
+// =======================================================
+
+
 // --- Funções de Storage ---
 
 function getTasksFromStorage() {
@@ -19,7 +181,6 @@ function getTasksFromStorage() {
         if (typeof task.historyLogged === 'undefined') {
             task.historyLogged = false;
         }
-        // Garante que o campo dueDate exista (útil para tarefas antigas)
         if (typeof task.dueDate === 'undefined') {
             task.dueDate = ''; 
         }
@@ -230,8 +391,9 @@ function renderTasks() {
             } catch (e) {}
         }
         
-        // Lógica do Alerta de Data Limite (Corrigida para icone final)
+        // Lógica do Alerta de Data Limite
         if (!task.completed && task.dueDate) {
+            // Cria timestamp da data limite na meia-noite (para comparação justa)
             const dueDateTimestamp = new Date(task.dueDate + 'T00:00:00').setHours(0, 0, 0, 0);
             
             if (dueDateTimestamp < today) {
@@ -295,28 +457,25 @@ function renderTasks() {
         
         // --- 6. Texto da Tarefa (Com Lógica de Edição) ---
         const textSpan = document.createElement('span');
-        // O texto principal da tarefa
         textSpan.textContent = task.text; 
         
         if (!task.completed) {
-             // Adiciona o ícone de alerta (15 dias ou prazo) ao final do texto, apenas se houver ícone
+            // Adiciona o ícone de alerta (15 dias ou prazo) ao final do texto, apenas se houver ícone
             if (alertSymbol.trim() !== '') {
                 const alertNode = document.createTextNode(alertSymbol);
                 textSpan.appendChild(alertNode);
             }
         }
         
-        // --- 7. Data Limite (NOVO) - ANEXADA AO FINAL DO TEXTO ---
+        // --- 7. Data Limite (ANEXADA AO FINAL DO TEXTO) ---
         if (task.dueDate) {
             const dueDateSpan = document.createElement('span');
             dueDateSpan.className = 'due-date';
             dueDateSpan.textContent = `Prazo: ${formatDate(task.dueDate)}`;
-            // ANEXA A DATA LIMITE DENTRO DO SPAN DO TEXTO
             textSpan.appendChild(dueDateSpan); 
         }
 
         if (task.completed) {
-            // Se estiver concluída, anexa o texto e a data limite ao container
             taskContentDiv.appendChild(textSpan);
         } else {
             // Edição Inline segura com addEventListener
@@ -358,7 +517,7 @@ function renderTasks() {
     saveTasksToStorage(tasks); 
 }
 
-// --- Lógica de Conclusão e Histórico (restante do código) ---
+// --- Lógica de Conclusão e Histórico ---
 
 function toggleComplete(index) {
     let tasks = getTasksFromStorage();
@@ -473,6 +632,9 @@ function displayHistory() {
 document.addEventListener('DOMContentLoaded', () => {
     renderTasks();
     displayHistory(); 
+    
+    // Inicializa o Pomodoro
+    initPomodoro(); 
     
     // Garante que o filtro seja carregado no estado atual
     const filterSelect = document.getElementById('filter-select');
