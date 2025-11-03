@@ -21,7 +21,6 @@ const SHORT_BREAK_TIME = 5 * 60;  // 5 minutos
 const LONG_BREAK_TIME = 15 * 60; // 15 minutos
 
 function resetTimerVariables() {
-    // Mantemos os ciclos, mas zeramos se o usuário apertar Reset total
     if (pomodoroCycles >= 4) {
          pomodoroCycles = 0;
     }
@@ -44,7 +43,6 @@ function updateDisplay() {
     displayEl.textContent = `${minutes}:${seconds}`;
     cycleEl.textContent = pomodoroCycles;
     
-    // Atualiza status e classes de estilo
     body.classList.remove('focus-mode', 'break-mode');
     
     if (currentPhase === 'pomodoro') {
@@ -58,7 +56,6 @@ function updateDisplay() {
         body.classList.add('break-mode');
     }
 
-    // Atualiza o título da página para notificação visual
     document.title = `(${minutes}:${seconds}) MyTasks | ${statusEl.textContent}`;
 }
 
@@ -69,7 +66,6 @@ function startTimer() {
     document.getElementById('start-btn').disabled = true;
     document.getElementById('pause-btn').disabled = false;
     
-    // Se o timer estiver em 0 (após o handlePhaseEnd), inicia o próximo ciclo
     if (timeRemaining <= 0) {
         setNextPhase();
     }
@@ -96,7 +92,6 @@ function pauseTimer() {
 
 function resetTimer() {
     pauseTimer();
-    // Zera TUDO
     pomodoroCycles = 0;
     resetTimerVariables();
     updateDisplay();
@@ -107,10 +102,8 @@ function resetTimer() {
 }
 
 function handlePhaseEnd() {
-    // Alerta o usuário quando o tempo acaba
     alert(`Fim do ciclo de ${currentPhase === 'pomodoro' ? 'Foco' : 'Descanso'}! Começando o próximo.`); 
     
-    // Configura a próxima fase, mas o startTimer() precisa ser chamado para começar o próximo ciclo
     setNextPhase(); 
     startTimer();
 }
@@ -127,12 +120,10 @@ function setNextPhase() {
             timeRemaining = SHORT_BREAK_TIME;
         }
     } else {
-        // Volta para o Pomodoro após o descanso (curto ou longo)
         currentPhase = 'pomodoro';
         timeRemaining = POMODORO_TIME;
     }
     
-    // Notifica o usuário
     if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('MyTasks Pomodoro', {
             body: `Começando a fase: ${document.getElementById('current-phase').textContent}`,
@@ -143,13 +134,10 @@ function setNextPhase() {
     updateDisplay();
 }
 
-// Inicialização dos Event Listeners do Timer (chamado no DOMContentLoaded)
 function initPomodoro() {
-    // Garante as variáveis iniciais
     resetTimerVariables();
     updateDisplay();
 
-    // Conexão dos botões
     const startBtn = document.getElementById('start-btn');
     const pauseBtn = document.getElementById('pause-btn');
     const resetBtn = document.getElementById('reset-btn');
@@ -158,7 +146,6 @@ function initPomodoro() {
     if (pauseBtn) pauseBtn.onclick = pauseTimer;
     if (resetBtn) resetBtn.onclick = resetTimer;
     
-    // Pede permissão de Notificações
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
     }
@@ -176,7 +163,7 @@ function getTasksFromStorage() {
     let tasks = tasksJson ? JSON.parse(tasksJson) : [];
     tasks = tasks.map(task => {
         if (!task.id) {
-            task.id = Date.now() + Math.random(); // Adiciona ID único
+            task.id = Date.now() + Math.random(); 
         }
         if (typeof task.historyLogged === 'undefined') {
             task.historyLogged = false;
@@ -184,6 +171,19 @@ function getTasksFromStorage() {
         if (typeof task.dueDate === 'undefined') {
             task.dueDate = ''; 
         }
+        // Garante que o array de subtarefas exista
+        if (!task.subtasks || !Array.isArray(task.subtasks)) {
+            task.subtasks = [];
+        }
+        // Garante que o estado de expansão exista
+        if (typeof task.subtaskExpanded === 'undefined') {
+            task.subtaskExpanded = false; 
+        }
+        // Garante que todas as subtarefas tenham ID (para o delete/toggle funcionar)
+        task.subtasks = task.subtasks.map(sub => {
+            if (!sub.id) sub.id = Date.now() + Math.random();
+            return sub;
+        });
         return task;
     });
     return tasks;
@@ -212,7 +212,6 @@ function formatDate(dateStr) {
 
 // --- Funções de Filtro, Edição e Utilitárias ---
 
-// Função para definir o filtro atual e re-renderizar
 function setFilter(newFilter) {
     currentFilter = newFilter;
     renderTasks();
@@ -225,7 +224,7 @@ function updatePriorityCounts(tasks) {
     let completedCount = 0;
 
     tasks.forEach(task => {
-        if (!task.completed) { // Conta apenas tarefas PENDENTES
+        if (!task.completed) { 
             switch (task.priority) {
                 case 'alta':
                     alta++;
@@ -242,7 +241,6 @@ function updatePriorityCounts(tasks) {
         }
     });
 
-    // Atualiza os contadores no HTML
     const countAltaEl = document.getElementById('count-alta');
     const countMediaEl = document.getElementById('count-media');
     const countBaixaEl = document.getElementById('count-baixa');
@@ -252,7 +250,6 @@ function updatePriorityCounts(tasks) {
     if (countMediaEl) countMediaEl.textContent = `Média: ${media}`;
     if (countBaixaEl) countBaixaEl.textContent = `Baixa: ${baixa}`;
     
-    // Configura o Botão de Limpeza
     if (clearBtn) {
         clearBtn.disabled = completedCount === 0;
         clearBtn.textContent = `Limpar Concluídas (${completedCount})`;
@@ -265,26 +262,20 @@ function clearCompletedTasks() {
     }
 
     let tasks = getTasksFromStorage();
-    
-    // Mantém apenas as tarefas que NÃO estão concluídas
     tasks = tasks.filter(task => !task.completed); 
-    
     saveTasksToStorage(tasks);
     renderTasks(); 
 }
 
-// Salva o texto editado (chamado pelo onblur ou onkeydown do input)
 function saveTaskText(index, newText) {
     let tasks = getTasksFromStorage();
-    
     const taskToUpdate = tasks[index];
 
     if (!taskToUpdate) return;
     
-    // Garante que o texto não esteja vazio
     if (newText.trim() === '') {
         alert('O texto da tarefa não pode estar vazio. Edição cancelada.');
-        renderTasks(); // Recarrega para restaurar o texto original
+        renderTasks(); 
         return;
     }
     
@@ -320,7 +311,9 @@ function addTask() {
         dateAdded: dateAdded,
         completed: false,
         historyLogged: false,
-        dueDate: dueDate 
+        dueDate: dueDate,
+        subtasks: [], 
+        subtaskExpanded: false
     };
 
     let tasks = getTasksFromStorage();
@@ -328,7 +321,7 @@ function addTask() {
     saveTasksToStorage(tasks);
 
     input.value = '';
-    dueDateInput.value = ''; // Limpa o campo de data após adicionar
+    dueDateInput.value = ''; 
 
     renderTasks();
 }
@@ -340,15 +333,84 @@ function changePriority(index, newPriority) {
     renderTasks();
 }
 
-// FUNÇÃO renderTasks COM DOM PURO E LÓGICA DE DATA LIMITE CORRIGIDA
+// NOVO: Toggle do estado de expansão
+function toggleSubtaskArea(index) {
+    let tasks = getTasksFromStorage();
+    const task = tasks[index];
+    task.subtaskExpanded = !task.subtaskExpanded;
+    saveTasksToStorage(tasks);
+    
+    // Atualiza apenas o visual, sem recarregar todas as tarefas
+    const taskEl = document.querySelector(`.task-item[data-id="${task.id}"]`);
+    if (taskEl) {
+        const expanderBtn = taskEl.querySelector('.subtask-expander');
+        const subtaskArea = taskEl.querySelector('.subtask-area');
+
+        if (task.subtaskExpanded) {
+            expanderBtn.classList.add('expanded');
+            subtaskArea.style.display = 'block';
+        } else {
+            expanderBtn.classList.remove('expanded');
+            subtaskArea.style.display = 'none';
+        }
+    }
+}
+
+
+// NOVO: Funções de manipulação de Subtarefas
+function addSubtask(taskIndex) {
+    let tasks = getTasksFromStorage();
+    const task = tasks[taskIndex];
+    
+    const inputEl = document.getElementById(`subtask-input-${task.id}`);
+    const subtaskText = inputEl.value.trim();
+
+    if (subtaskText === '') return;
+
+    task.subtasks.push({
+        id: Date.now() + Math.random(),
+        text: subtaskText,
+        completed: false
+    });
+
+    inputEl.value = ''; 
+    saveTasksToStorage(tasks);
+    renderTasks(); 
+}
+
+function toggleSubtaskCompletion(taskIndex, subtaskId) {
+    let tasks = getTasksFromStorage();
+    const task = tasks[taskIndex];
+    
+    const subtask = task.subtasks.find(s => s.id == subtaskId);
+    if (subtask) {
+        subtask.completed = !subtask.completed;
+    }
+
+    saveTasksToStorage(tasks);
+    renderTasks();
+}
+
+function deleteSubtask(taskIndex, subtaskId) {
+    if (!confirm('Tem certeza de que deseja excluir esta subtarefa?')) return;
+    
+    let tasks = getTasksFromStorage();
+    const task = tasks[taskIndex];
+    
+    task.subtasks = task.subtasks.filter(s => s.id != subtaskId);
+
+    saveTasksToStorage(tasks);
+    renderTasks();
+}
+
+
+// FUNÇÃO renderTasks REVISADA
 function renderTasks() {
     const taskList = document.getElementById('task-list');
     let tasks = getTasksFromStorage();
 
-    // 1. ATUALIZA OS CONTADORES
     updatePriorityCounts(tasks); 
 
-    // 2. APLICA O FILTRO
     let filteredTasks = tasks.filter(task => {
         if (currentFilter === 'all' || task.completed) {
             return true;
@@ -356,7 +418,6 @@ function renderTasks() {
         return task.priority === currentFilter;
     });
     
-    // 3. ORDENAÇÃO
     const priorityOrder = { 'alta': 3, 'media': 2, 'baixa': 1 };
 
     filteredTasks.sort((a, b) => {
@@ -368,7 +429,6 @@ function renderTasks() {
 
     taskList.innerHTML = ''; 
 
-    // Pega a meia-noite de hoje para comparação de prazos
     const today = new Date().setHours(0, 0, 0, 0); 
 
     filteredTasks.forEach((task) => {
@@ -377,7 +437,7 @@ function renderTasks() {
         const dateStringForCalculation = task.dateAdded || task.date;
         const dateStringToDisplay = task.dateDisplay || task.date;
         let alertSymbol = '';
-        let dueClass = ''; // Classe CSS para alerta de prazo
+        let dueClass = ''; 
 
         // Lógica do Alerta de 15 dias (tarefa antiga)
         if (!task.completed && dateStringForCalculation) {
@@ -393,15 +453,12 @@ function renderTasks() {
         
         // Lógica do Alerta de Data Limite
         if (!task.completed && task.dueDate) {
-            // Cria timestamp da data limite na meia-noite (para comparação justa)
             const dueDateTimestamp = new Date(task.dueDate + 'T00:00:00').setHours(0, 0, 0, 0);
             
             if (dueDateTimestamp < today) {
-                // Prazo Expirado (Atrasado)
                 dueClass = 'due-expired';
                 alertSymbol = ' ❌ ' + alertSymbol; 
             } else if (dueDateTimestamp === today) {
-                // Prazo Hoje
                 dueClass = 'due-near';
                 alertSymbol = ' 🔔 ' + alertSymbol;
             }
@@ -415,6 +472,7 @@ function renderTasks() {
         // --- INÍCIO DA CRIAÇÃO DO ELEMENTO (DOM PURO) ---
         const li = document.createElement('li');
         li.className = classList;
+        li.setAttribute('data-id', task.id); // Adiciona ID para facilitar a seleção
         
         // --- 1. Botão de Excluir ---
         const deleteBtn = document.createElement('button');
@@ -460,7 +518,6 @@ function renderTasks() {
         textSpan.textContent = task.text; 
         
         if (!task.completed) {
-            // Adiciona o ícone de alerta (15 dias ou prazo) ao final do texto, apenas se houver ícone
             if (alertSymbol.trim() !== '') {
                 const alertNode = document.createTextNode(alertSymbol);
                 textSpan.appendChild(alertNode);
@@ -478,7 +535,6 @@ function renderTasks() {
         if (task.completed) {
             taskContentDiv.appendChild(textSpan);
         } else {
-            // Edição Inline segura com addEventListener
             textSpan.className = 'task-text';
             textSpan.title = 'Dê um clique duplo para editar';
             
@@ -507,10 +563,86 @@ function renderTasks() {
             taskContentDiv.appendChild(textSpan);
         }
         
-        // --- 8. Montagem Final do LI ---
+        // --- 8. Botão de Expansão de Subtarefas ---
+        const expanderBtn = document.createElement('button');
+        expanderBtn.className = `subtask-expander ${task.subtaskExpanded ? 'expanded' : ''}`;
+        expanderBtn.textContent = '►'; // Símbolo simples para expandir
+        expanderBtn.onclick = () => toggleSubtaskArea(originalIndex);
+        
+        taskContentDiv.appendChild(expanderBtn);
+
+
+        // --- Montagem Inicial do LI ---
         li.appendChild(taskContentDiv);
         li.appendChild(deleteBtn);
 
+        
+        // --- 9. Área e Lógica das Subtarefas (abaixo do task-content) ---
+        
+        const subtaskAreaDiv = document.createElement('div');
+        subtaskAreaDiv.className = 'subtask-area';
+        subtaskAreaDiv.style.display = task.subtaskExpanded ? 'block' : 'none'; // Estado persistente
+
+        const subtaskList = document.createElement('ul');
+        subtaskList.className = 'subtask-list';
+
+        task.subtasks.forEach(subtask => {
+            const subtaskLi = document.createElement('li');
+            subtaskLi.className = `subtask-item ${subtask.completed ? 'subtask-completed' : ''}`;
+
+            const subtaskCheckbox = document.createElement('input');
+            subtaskCheckbox.type = 'checkbox';
+            subtaskCheckbox.checked = subtask.completed;
+            subtaskCheckbox.onclick = () => toggleSubtaskCompletion(originalIndex, subtask.id);
+
+            const subtaskTextSpan = document.createElement('span');
+            subtaskTextSpan.className = 'subtask-text';
+            subtaskTextSpan.textContent = subtask.text;
+
+            const subtaskDeleteBtn = document.createElement('button');
+            subtaskDeleteBtn.className = 'delete-subtask-btn';
+            subtaskDeleteBtn.textContent = 'X';
+            subtaskDeleteBtn.onclick = () => deleteSubtask(originalIndex, subtask.id);
+            
+            subtaskLi.appendChild(subtaskCheckbox);
+            subtaskLi.appendChild(subtaskTextSpan);
+            subtaskLi.appendChild(subtaskDeleteBtn);
+            subtaskList.appendChild(subtaskLi);
+        });
+
+        // Input para adicionar nova subtarefa
+        const addSubtaskContainer = document.createElement('div');
+        const newSubtaskInput = document.createElement('input');
+        newSubtaskInput.type = 'text';
+        newSubtaskInput.className = 'new-subtask-input';
+        newSubtaskInput.id = `subtask-input-${task.id}`;
+        newSubtaskInput.placeholder = 'Novo passo...';
+        
+        const addSubtaskBtn = document.createElement('button');
+        addSubtaskBtn.className = 'add-subtask-btn';
+        addSubtaskBtn.textContent = 'Adicionar';
+        addSubtaskBtn.onclick = () => addSubtask(originalIndex);
+        
+        // Permite adicionar com Enter
+        newSubtaskInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addSubtask(originalIndex);
+            }
+        };
+
+        addSubtaskContainer.appendChild(newSubtaskInput);
+        addSubtaskContainer.appendChild(addSubtaskBtn);
+
+        subtaskAreaDiv.appendChild(subtaskList);
+        
+        // Adiciona a área de input/botão somente se a tarefa não estiver concluída
+        if (!task.completed) {
+            subtaskAreaDiv.appendChild(addSubtaskContainer);
+        }
+
+        li.appendChild(subtaskAreaDiv);
+        
         taskList.appendChild(li);
     });
 
@@ -524,6 +656,7 @@ function toggleComplete(index) {
     const task = tasks[index];
 
     if (!task.completed && !task.historyLogged) {
+        // Loga no histórico apenas a primeira vez que é marcada como concluída
         addToHistory(task);
         task.historyLogged = true; 
     } 
@@ -566,7 +699,7 @@ function addToHistory(task) {
             id: task.id, 
             text: task.text, 
             completedAt: new Date().toLocaleTimeString('pt-BR'),
-            entryId: Date.now() + Math.random() // ID único para a entrada do histórico
+            entryId: Date.now() + Math.random() 
         }); 
         saveHistoryToStorage(history);
     }
@@ -636,7 +769,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializa o Pomodoro
     initPomodoro(); 
     
-    // Garante que o filtro seja carregado no estado atual
     const filterSelect = document.getElementById('filter-select');
     if (filterSelect) {
         filterSelect.value = currentFilter;
