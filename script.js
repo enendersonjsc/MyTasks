@@ -1,117 +1,58 @@
-// CONFIGURAÇÕES DE TEMPO
+// CONFIGURAÇÕES E ESTADO
 const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // NOVO: Prazo do histórico
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_KEY = 'todoHistory';
+let currentFilter = 'all';
 
-let currentFilter = 'all'; 
-
-// =======================================================
-// === POMODORO TIMER ===
-// =======================================================
+// POMODORO
 let timerInterval, timeRemaining, isPaused = true, currentPhase = 'pomodoro', pomodoroCycles = 0;
 const POMODORO_TIME = 25 * 60, SHORT_BREAK_TIME = 5 * 60, LONG_BREAK_TIME = 15 * 60;
 
-function resetTimerVariables() {
-    if (pomodoroCycles >= 4) pomodoroCycles = 0;
-    currentPhase = 'pomodoro';
-    timeRemaining = POMODORO_TIME;
-    isPaused = true;
-}
-
-function updateDisplay() {
-    const minutes = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
-    const seconds = String(timeRemaining % 60).padStart(2, '0');
-    document.getElementById('timer-display').textContent = `${minutes}:${seconds}`;
-    document.getElementById('cycle-count').textContent = pomodoroCycles;
-    
-    const statusEl = document.getElementById('current-phase');
-    document.body.classList.remove('focus-mode', 'break-mode');
-    
-    if (currentPhase === 'pomodoro') {
-        statusEl.textContent = 'Foco (25 min)';
-        document.body.classList.add('focus-mode');
-    } else {
-        statusEl.textContent = currentPhase === 'short-break' ? 'Descanso Curto' : 'Descanso Longo';
-        document.body.classList.add('break-mode');
-    }
-}
-
-function startTimer() {
-    if (!isPaused) return;
-    isPaused = false;
-    document.getElementById('start-btn').disabled = true;
-    document.getElementById('pause-btn').disabled = false;
-    timerInterval = setInterval(() => {
-        if (timeRemaining > 0) { timeRemaining--; updateDisplay(); }
-        else { clearInterval(timerInterval); handlePhaseEnd(); }
-    }, 1000);
-}
-
-function pauseTimer() {
-    isPaused = true;
-    clearInterval(timerInterval);
-    document.getElementById('start-btn').disabled = false;
-    document.getElementById('pause-btn').disabled = true;
-}
-
-function resetTimer() {
-    pauseTimer();
-    pomodoroCycles = 0;
-    resetTimerVariables();
-    updateDisplay();
-}
-
-function handlePhaseEnd() {
-    alert("Fim do ciclo!");
-    if (currentPhase === 'pomodoro') {
-        pomodoroCycles++;
-        currentPhase = (pomodoroCycles % 4 === 0) ? 'long-break' : 'short-break';
-        timeRemaining = (currentPhase === 'long-break') ? LONG_BREAK_TIME : SHORT_BREAK_TIME;
-    } else {
-        currentPhase = 'pomodoro';
-        timeRemaining = POMODORO_TIME;
-    }
-    updateDisplay();
-    startTimer();
-}
-
 // =======================================================
-// === STORAGE & CORE ===
+// === CORE STORAGE ===
 // =======================================================
-
 function getTasksFromStorage() {
     const tasks = JSON.parse(localStorage.getItem('todoTasks') || '[]');
     return tasks.map(t => ({
         ...t,
         subtasks: t.subtasks || [],
-        subtaskExpanded: !!t.subtaskExpanded,
-        dueDate: t.dueDate || ''
+        subtaskExpanded: !!t.subtaskExpanded
     }));
 }
-
 function saveTasksToStorage(tasks) { localStorage.setItem('todoTasks', JSON.stringify(tasks)); }
-function getHistoryFromStorage() { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}'); }
-function saveHistoryToStorage(h) { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); }
 
-// LIMPEZA AUTOMÁTICA (7 DIAS)
-function cleanupOldHistory() {
-    const history = getHistoryFromStorage();
-    const now = new Date();
-    let changed = false;
+// =======================================================
+// === DRAG AND DROP LOGIC ===
+// =======================================================
+let dragTargetIndex = null;
 
-    Object.keys(history).forEach(dateKey => {
-        const historyDate = new Date(dateKey + 'T00:00:00');
-        if (now - historyDate > SEVEN_DAYS_MS) {
-            delete history[dateKey];
-            changed = true;
-        }
-    });
+function handleDragStart(e, index) {
+    dragTargetIndex = index;
+    e.currentTarget.classList.add('dragging');
+}
 
-    if (changed) saveHistoryToStorage(history);
+function handleDragOver(e) {
+    e.preventDefault(); // Necessário para permitir o drop
+}
+
+function handleDrop(e, toIndex) {
+    e.preventDefault();
+    if (dragTargetIndex === null || dragTargetIndex === toIndex) return;
+
+    const tasks = getTasksFromStorage();
+    const draggedItem = tasks.splice(dragTargetIndex, 1)[0];
+    tasks.splice(toIndex, 0, draggedItem);
+    
+    saveTasksToStorage(tasks);
+    renderTasks();
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
 }
 
 // =======================================================
-// === TAREFAS & SUBTAREFAS ===
+// === TAREFAS ===
 // =======================================================
 
 function addTask() {
@@ -119,20 +60,31 @@ function addTask() {
     if (!input.value.trim()) return;
     
     const tasks = getTasksFromStorage();
-    tasks.push({
+    tasks.unshift({ // Adiciona no topo
         id: Date.now(),
         text: input.value.trim(),
         priority: document.getElementById('priority-select').value,
         dueDate: document.getElementById('due-date-input').value,
         dateAdded: new Date().toISOString(),
-        dateDisplay: new Date().toLocaleDateString('pt-BR'),
         completed: false,
-        subtasks: []
+        subtasks: [],
+        subtaskExpanded: false
     });
     
     saveTasksToStorage(tasks);
     input.value = '';
     renderTasks();
+}
+
+// NOVA FUNÇÃO: Alterar prioridade de tarefa existente
+function updateTaskPriority(id, newPriority) {
+    const tasks = getTasksFromStorage();
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+        task.priority = newPriority;
+        saveTasksToStorage(tasks);
+        renderTasks(); // Re-renderiza para mudar a cor de fundo
+    }
 }
 
 function toggleComplete(id) {
@@ -148,8 +100,92 @@ function toggleComplete(id) {
 }
 
 function deleteTask(id) {
-    if (!confirm("Excluir tarefa?")) return;
+    if (!confirm("Excluir tarefa permanentemente?")) return;
     const tasks = getTasksFromStorage().filter(t => t.id !== id);
+    saveTasksToStorage(tasks);
+    renderTasks();
+}
+
+// =======================================================
+// === RENDERIZAÇÃO ===
+// =======================================================
+
+function renderTasks() {
+    const list = document.getElementById('task-list');
+    const tasks = getTasksFromStorage();
+    const today = new Date().setHours(0,0,0,0);
+
+    // Filtro
+    let displayTasks = tasks;
+    if (currentFilter !== 'all') {
+        displayTasks = tasks.filter(t => t.completed || t.priority === currentFilter);
+    }
+
+    list.innerHTML = '';
+
+    displayTasks.forEach((t, index) => {
+        const li = document.createElement('li');
+        li.className = `task-item task-${t.priority} ${t.completed ? 'task-completed' : ''}`;
+        li.draggable = true;
+
+        // Eventos de Drag and Drop
+        li.ondragstart = (e) => handleDragStart(e, index);
+        li.ondragover = (e) => handleDragOver(e);
+        li.ondrop = (e) => handleDrop(e, index);
+        li.ondragend = (e) => handleDragEnd(e);
+
+        const isOld = !t.completed && (new Date() - new Date(t.dateAdded) > FIFTEEN_DAYS_MS);
+        
+        li.innerHTML = `
+            <div class="task-main-row">
+                <div class="task-info">
+                    <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleComplete(${t.id})">
+                    <span class="task-text">${t.text} ${isOld ? '⚠️' : ''}</span>
+                    
+                    ${!t.completed ? `
+                        <select class="task-priority-inline" onchange="updateTaskPriority(${t.id}, this.value)">
+                            <option value="alta" ${t.priority === 'alta' ? 'selected' : ''}>Alta</option>
+                            <option value="media" ${t.priority === 'media' ? 'selected' : ''}>Média</option>
+                            <option value="baixa" ${t.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
+                        </select>
+                    ` : ''}
+                </div>
+                <div style="display:flex; align-items:center; gap:10px">
+                    <button class="subtask-expander ${t.subtaskExpanded ? 'expanded' : ''}" onclick="toggleExpand(${t.id})">►</button>
+                    <button class="delete-btn" onclick="deleteTask(${t.id})">×</button>
+                </div>
+            </div>
+            
+            ${t.dueDate ? `<div style="font-size:0.75em; margin-top:5px; font-weight:bold">📅 Prazo: ${new Date(t.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : ''}
+
+            <div class="subtask-area" style="display: ${t.subtaskExpanded ? 'block' : 'none'}">
+                <div class="subtask-list">
+                    ${t.subtasks.map(s => `
+                        <div class="subtask-item ${s.completed ? 'subtask-completed' : ''}">
+                            <input type="checkbox" ${s.completed ? 'checked' : ''} onclick="toggleSub(${t.id}, ${s.id})">
+                            <span>${s.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                ${!t.completed ? `
+                    <div style="margin-top:8px">
+                        <input type="text" placeholder="Adicionar passo..." class="new-subtask-input" id="sub-in-${t.id}">
+                        <button onclick="addSubtask(${t.id})" style="color:#61dafb; background:none; border:none; cursor:pointer; font-weight:bold">+</button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        list.appendChild(li);
+    });
+
+    updateCounters(tasks);
+}
+
+// SUBTAREFAS LOGIC
+function toggleExpand(id) {
+    const tasks = getTasksFromStorage();
+    const task = tasks.find(t => t.id === id);
+    task.subtaskExpanded = !task.subtaskExpanded;
     saveTasksToStorage(tasks);
     renderTasks();
 }
@@ -166,106 +202,101 @@ function addSubtask(taskId) {
 
 function toggleSub(taskId, subId) {
     const tasks = getTasksFromStorage();
-    const sub = tasks.find(t => t.id === taskId).subtasks.find(s => s.id === subId);
+    const task = tasks.find(t => t.id === taskId);
+    const sub = task.subtasks.find(s => s.id === subId);
     sub.completed = !sub.completed;
     saveTasksToStorage(tasks);
     renderTasks();
 }
 
-function toggleExpand(id) {
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === id);
-    task.subtaskExpanded = !task.subtaskExpanded;
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-
 // =======================================================
-// === RENDERIZAÇÃO ===
+// === POMODORO & OUTROS ===
 // =======================================================
 
-function renderTasks() {
-    const list = document.getElementById('task-list');
-    const tasks = getTasksFromStorage();
-    const today = new Date().setHours(0,0,0,0);
-
-    // Filtro e Ordenação
-    let filtered = tasks.filter(t => currentFilter === 'all' || t.completed || t.priority === currentFilter);
-    const pOrder = { alta: 3, media: 2, baixa: 1 };
-    filtered.sort((a,b) => a.completed - b.completed || pOrder[b.priority] - pOrder[a.priority]);
-
-    list.innerHTML = '';
-    filtered.forEach(t => {
-        const isOld = !t.completed && (new Date() - new Date(t.dateAdded) > FIFTEEN_DAYS_MS);
-        const dueStatus = t.dueDate ? (new Date(t.dueDate + 'T00:00:00').setHours(0,0,0,0) < today ? 'due-expired' : (new Date(t.dueDate + 'T00:00:00').setHours(0,0,0,0) === today ? 'due-near' : '')) : '';
-
-        const li = document.createElement('li');
-        li.className = `task-item task-${t.priority} ${t.completed ? 'task-completed' : ''} ${dueStatus}`;
-        
-        li.innerHTML = `
-            <div class="task-content">
-                <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="toggleComplete(${t.id})">
-                <span class="task-text">${t.text} ${isOld ? '⚠️' : ''} 
-                    ${t.dueDate ? `<span class="due-date ${dueStatus}">Prazo: ${new Date(t.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</span>` : ''}
-                </span>
-                <button class="subtask-expander ${t.subtaskExpanded ? 'expanded' : ''}" onclick="toggleExpand(${t.id})">►</button>
-            </div>
-            <button class="delete-btn" onclick="deleteTask(${t.id})">X</button>
-            <div class="subtask-area" style="display: ${t.subtaskExpanded ? 'block' : 'none'}">
-                <ul style="list-style:none; padding:0">
-                    ${t.subtasks.map(s => `
-                        <li class="subtask-item ${s.completed ? 'subtask-completed' : ''}">
-                            <input type="checkbox" ${s.completed ? 'checked' : ''} onclick="toggleSub(${t.id}, ${s.id})">
-                            <span class="subtask-text">${s.text}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-                ${!t.completed ? `
-                    <input type="text" id="sub-in-${t.id}" class="new-subtask-input" placeholder="Passo...">
-                    <button onclick="addSubtask(${t.id})" style="color:#61dafb; background:none; border:none; cursor:pointer">+</button>
-                ` : ''}
-            </div>
-        `;
-        list.appendChild(li);
-    });
-
-    // Atualiza contadores
+function updateCounters(tasks) {
     document.getElementById('count-alta').textContent = `Alta: ${tasks.filter(t => !t.completed && t.priority === 'alta').length}`;
     document.getElementById('count-media').textContent = `Média: ${tasks.filter(t => !t.completed && t.priority === 'media').length}`;
     document.getElementById('count-baixa').textContent = `Baixa: ${tasks.filter(t => !t.completed && t.priority === 'baixa').length}`;
-    const compCount = tasks.filter(t => t.completed).length;
-    document.getElementById('clear-completed-btn').disabled = compCount === 0;
-    document.getElementById('clear-completed-btn').textContent = `Limpar Concluídas (${compCount})`;
+    const comp = tasks.filter(t => t.completed).length;
+    document.getElementById('clear-completed-btn').disabled = comp === 0;
+    document.getElementById('clear-completed-btn').textContent = `Limpar Concluídas (${comp})`;
 }
 
-// =======================================================
-// === HISTÓRICO ===
-// =======================================================
+function resetTimerVariables() {
+    currentPhase = 'pomodoro'; timeRemaining = POMODORO_TIME; isPaused = true;
+}
 
-function addToHistory(task) {
-    const h = getHistoryFromStorage();
-    const key = new Date().toISOString().split('T')[0];
-    if (!h[key]) h[key] = [];
-    if (!h[key].some(e => e.id === task.id)) {
-        h[key].push({ id: task.id, text: task.text, time: new Date().toLocaleTimeString('pt-BR') });
-        saveHistoryToStorage(h);
+function updateTimerDisplay() {
+    const m = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
+    const s = String(timeRemaining % 60).padStart(2, '0');
+    document.getElementById('timer-display').textContent = `${m}:${s}`;
+    document.getElementById('cycle-count').textContent = pomodoroCycles;
+    const statusEl = document.getElementById('current-phase');
+    document.body.classList.remove('focus-mode', 'break-mode');
+    if (currentPhase === 'pomodoro') {
+        statusEl.textContent = 'Foco (25 min)'; document.body.classList.add('focus-mode');
+    } else {
+        statusEl.textContent = 'Descanso'; document.body.classList.add('break-mode');
     }
 }
 
-function displayHistory() {
-    cleanupOldHistory(); // LIMPA ANTES DE MOSTRAR
-    const container = document.getElementById('history-container');
-    const h = getHistoryFromStorage();
-    const keys = Object.keys(h).sort().reverse();
+function startTimer() {
+    if (!isPaused) return; isPaused = false;
+    document.getElementById('start-btn').disabled = true;
+    document.getElementById('pause-btn').disabled = false;
+    timerInterval = setInterval(() => {
+        if (timeRemaining > 0) { timeRemaining--; updateTimerDisplay(); }
+        else { clearInterval(timerInterval); handlePhaseEnd(); }
+    }, 1000);
+}
 
+function pauseTimer() {
+    isPaused = true; clearInterval(timerInterval);
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+}
+
+function handlePhaseEnd() {
+    alert("Ciclo finalizado!");
+    if (currentPhase === 'pomodoro') {
+        pomodoroCycles++;
+        currentPhase = (pomodoroCycles % 4 === 0) ? 'long-break' : 'short-break';
+        timeRemaining = (currentPhase === 'long-break') ? LONG_BREAK_TIME : SHORT_BREAK_TIME;
+    } else {
+        currentPhase = 'pomodoro'; timeRemaining = POMODORO_TIME;
+    }
+    updateTimerDisplay(); startTimer();
+}
+
+// HISTÓRICO 7 DIAS
+function addToHistory(task) {
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+    const key = new Date().toISOString().split('T')[0];
+    if (!h[key]) h[key] = [];
+    h[key].push({ text: task.text, time: new Date().toLocaleTimeString('pt-BR') });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+}
+
+function displayHistory() {
+    const container = document.getElementById('history-container');
+    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+    const now = new Date();
+    
+    // Limpeza automática
+    Object.keys(h).forEach(k => {
+        if (now - new Date(k + 'T00:00:00') > SEVEN_DAYS_MS) delete h[k];
+    });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+
+    const keys = Object.keys(h).sort().reverse();
     container.innerHTML = '<h3>Histórico (Últimos 7 dias)</h3>';
     keys.forEach(k => {
-        const dateLabel = new Date(k + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const label = new Date(k + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric' });
         container.innerHTML += `
             <details>
-                <summary><strong>${dateLabel} (${h[k].length})</strong></summary>
-                <div style="padding:10px">
-                    ${h[k].map(e => `<div class="history-item-line"><span>[${e.time}] ${e.text}</span></div>`).join('')}
+                <summary><strong>${label} (${h[k].length})</strong></summary>
+                <div style="padding:5px 15px">
+                    ${h[k].map(e => `<div class="history-item-line">[${e.time}] ${e.text}</div>`).join('')}
                 </div>
             </details>
         `;
@@ -273,21 +304,16 @@ function displayHistory() {
 }
 
 function setFilter(f) { currentFilter = f; renderTasks(); }
-function clearCompletedTasks() { 
-    if(confirm("Remover concluídas?")) {
+function clearCompletedTasks() {
+    if (confirm("Remover todas as concluídas?")) {
         saveTasksToStorage(getTasksFromStorage().filter(t => !t.completed));
         renderTasks();
     }
 }
 
-// INICIALIZAÇÃO
 document.addEventListener('DOMContentLoaded', () => {
-    resetTimerVariables();
-    updateDisplay();
-    renderTasks();
-    displayHistory();
-    
+    resetTimerVariables(); updateTimerDisplay(); renderTasks(); displayHistory();
     document.getElementById('start-btn').onclick = startTimer;
     document.getElementById('pause-btn').onclick = pauseTimer;
-    document.getElementById('reset-btn').onclick = resetTimer;
+    document.getElementById('reset-btn').onclick = () => { pauseTimer(); pomodoroCycles = 0; resetTimerVariables(); updateTimerDisplay(); };
 });
