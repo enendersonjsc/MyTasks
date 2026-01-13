@@ -1,8 +1,7 @@
-/* Configurações Globais (Dark Mode base) */
 body {
     font-family: 'Arial', sans-serif;
-    background-color: #282c34; /* Fundo escuro */
-    color: #f0f0f0; /* Texto claro */
+    background-color: #282c34;
+    color: #f0f0f0;
     margin: 0;
     padding: 0;
     display: flex;
@@ -15,7 +14,7 @@ main {
     width: 100%;
     max-width: 800px;
     padding: 20px;
-    background-color: #3c414c; /* Container principal mais claro que o fundo */
+    background-color: #3c414c;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     border-radius: 8px;
     margin: 20px 0;
@@ -28,17 +27,12 @@ header {
     padding: 20px 0;
 }
 
-h1 {
-    color: #61dafb;
-    margin: 0;
-}
+h1 { color: #61dafb; margin: 0; }
 
-/* ---------------------------------- */
-/* POMODORO TIMER STYLES */
-/* ---------------------------------- */
+/* POMODORO */
 #pomodoro-timer {
     width: 100%;
-    max-width: 400px; /* Limita a largura do timer */
+    max-width: 400px;
     text-align: center;
     padding: 20px;
     margin-bottom: 20px;
@@ -47,473 +41,64 @@ h1 {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-#timer-display {
-    font-size: 4em;
-    font-weight: bold;
-    color: #61dafb; /* Cor principal do Timer */
-    margin-bottom: 15px;
-    padding: 10px 0;
-    transition: color 0.5s; 
-}
+#timer-display { font-size: 4em; font-weight: bold; color: #61dafb; margin-bottom: 15px; transition: color 0.5s; }
+#timer-controls button { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+#start-btn { background-color: #2ecc71; color: #1e1e1e; }
+#pause-btn { background-color: #f39c12; color: #1e1e1e; }
+#reset-btn { background-color: #e74c3c; color: white; }
+#timer-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+.focus-mode #timer-display, .focus-mode #current-phase { color: #e74c3c; }
+.break-mode #timer-display, .break-mode #current-phase { color: #2ecc71; }
 
-#timer-controls button {
-    padding: 10px 20px;
-    margin: 5px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: background-color 0.2s, opacity 0.2s;
-}
+/* INPUT AREA */
+#input-area { display: flex; gap: 10px; margin-bottom: 20px; }
+#task-input, #priority-select, #due-date-input { padding: 10px; border: none; border-radius: 4px; background-color: #555b66; color: #f0f0f0; flex-grow: 1; }
+#input-area button { padding: 10px 20px; background-color: #61dafb; color: #1e1e1e; border: none; border-radius: 4px; cursor: pointer; }
 
-#start-btn {
-    background-color: #2ecc71; /* Verde */
-    color: #1e1e1e;
-}
-#start-btn:hover:not(:disabled) { background-color: #27ae60; }
-
-#pause-btn {
-    background-color: #f39c12; /* Laranja */
-    color: #1e1e1e;
-}
-#pause-btn:hover:not(:disabled) { background-color: #d35400; }
-
-#reset-btn {
-    background-color: #e74c3c; /* Vermelho */
-    color: white;
-}
-#reset-btn:hover { background-color: #c0392b; }
-
-#timer-controls button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-#timer-status {
-    margin-top: 15px;
-    font-size: 1.1em;
-    color: #ccc;
-}
-
-/* Destaque para o status */
-#current-phase {
-    font-weight: bold;
-    color: #61dafb;
-    transition: color 0.5s;
-}
-
-/* Estilos dinâmicos para Foco e Descanso (Mudam a cor principal do timer) */
-.focus-mode #timer-display, .focus-mode #current-phase {
-    color: #e74c3c; /* Vermelho para FOCO */
-}
-
-.break-mode #timer-display, .break-mode #current-phase {
-    color: #2ecc71; /* Verde para DESCANSO */
-}
-
-/* Área de Input */
-#input-area {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-#task-input, #priority-select, #due-date-input {
-    padding: 10px;
-    border: none;
-    border-radius: 4px;
-    background-color: #555b66;
-    color: #f0f0f0;
-    flex-grow: 1;
-}
-
-#task-input::placeholder, #due-date-input {
-    color: #ccc;
-}
-
-#input-area button {
-    padding: 10px 20px;
-    background-color: #61dafb;
-    color: #1e1e1e;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-#input-area button:hover {
-    background-color: #21a1f1;
-}
-
-/* Área de Controles e Estatísticas */
-#controls-area {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
-}
-
-#priority-counts {
-    display: flex;
-    gap: 15px;
-    font-size: 0.9em;
-}
-
-.priority-count {
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-.count-alta { background-color: #e74c3c; color: white; }
+/* CONTROLS */
+#controls-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+#priority-counts { display: flex; gap: 15px; }
+.priority-count { padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+.count-alta { background-color: #e74c3c; }
 .count-media { background-color: #f39c12; color: #1e1e1e; }
 .count-baixa { background-color: #2ecc71; color: #1e1e1e; }
+#action-buttons { display: flex; gap: 10px; }
+#filter-select, #clear-completed-btn { padding: 8px 15px; border: none; border-radius: 4px; background-color: #555b66; color: #f0f0f0; }
 
-#action-buttons {
-    display: flex;
-    gap: 10px;
+/* TASK ITEMS */
+#task-list { list-style: none; padding: 0; }
+.task-item { 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 15px; margin-bottom: 10px; border-radius: 6px; border-left: 5px solid; 
+    background-color: #444a57; flex-wrap: wrap;
 }
+.task-alta { border-left-color: #e74c3c; }
+.task-media { border-left-color: #f39c12; }
+.task-baixa { border-left-color: #2ecc71; }
+.task-completed { opacity: 0.6; text-decoration: line-through; background-color: #343740; }
 
-#filter-select, #clear-completed-btn {
-    padding: 8px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    background-color: #555b66;
-    color: #f0f0f0;
-    transition: background-color 0.2s;
-}
+.task-content { display: flex; align-items: center; flex-grow: 1; gap: 10px; flex-wrap: wrap; }
+.task-text { flex-grow: 1; min-width: 150px; }
+.due-date { font-size: 0.8em; font-weight: bold; margin-left: 10px; padding: 2px 6px; border-radius: 4px; background: #555b66; }
+.due-expired { background-color: #e74c3c; color: white; }
+.due-near { background-color: #f39c12; color: #1e1e1e; }
 
-#clear-completed-btn:hover:not(:disabled) {
-    background-color: #e74c3c;
-}
+/* SUBTAREFAS */
+.subtask-area { width: 100%; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #555b66; }
+.subtask-item { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; font-size: 0.9em; }
+.subtask-text { flex-grow: 1; margin-left: 8px; }
+.subtask-completed .subtask-text { text-decoration: line-through; color: #888; }
+.new-subtask-input { width: 70%; padding: 5px; border-radius: 4px; border: 1px solid #61dafb; background: #444a57; color: white; }
+.subtask-expander { background: none; border: none; color: #61dafb; cursor: pointer; transition: 0.2s; }
+.subtask-expander.expanded { transform: rotate(90deg); }
 
-#clear-completed-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
+/* HISTORICO */
+#history-container { margin-top: 30px; border-top: 1px solid #555b66; padding-top: 15px; }
+#history-container details { background: #343740; padding: 10px; border-radius: 5px; margin-bottom: 5px; }
+.history-item-line { display: flex; justify-content: space-between; font-size: 0.9em; padding: 4px 0; border-bottom: 1px dotted #555; }
+.delete-btn { background: none; border: none; color: #e74c3c; cursor: pointer; font-weight: bold; }
 
-
-/* Lista de Tarefas */
-#task-list {
-    list-style: none;
-    padding: 0;
-}
-
-.task-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 6px;
-    border-left: 5px solid;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    transition: background-color 0.3s, opacity 0.3s;
-    /* Ajuste para acomodar a área de subtarefas abaixo do conteúdo principal */
-    flex-wrap: wrap; 
-}
-
-/* Estilos de Fundo e Borda por Prioridade */
-.task-alta { 
-    background-color: #e74c3c22; 
-    border-left-color: #e74c3c; 
-}
-.task-media { 
-    background-color: #f39c1222; 
-    border-left-color: #f39c12; 
-}
-.task-baixa { 
-    background-color: #2ecc7122; 
-    border-left-color: #2ecc71; 
-}
-
-.task-content {
-    display: flex;
-    align-items: flex-start; /* Alinha no topo para o botão de expansão */
-    flex-grow: 1;
-    gap: 10px;
-    flex-wrap: wrap; 
-}
-
-.task-content input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-}
-
-.task-priority-select {
-    padding: 5px 8px;
-    border-radius: 4px;
-    background-color: #555b66;
-    color: #f0f0f0;
-    border: 1px solid #666;
-    font-size: 0.9em;
-}
-
-.task-text {
-    flex-grow: 1;
-    cursor: text;
-    padding: 2px 5px;
-    border-radius: 3px;
-    min-width: 150px; 
-    display: flex; 
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-/* Edição Inline */
-.edit-input {
-    padding: 5px;
-    border: 1px solid #61dafb;
-    border-radius: 4px;
-    background-color: #555b66;
-    color: #f0f0f0;
-    flex-grow: 1;
-    min-width: 200px;
-}
-
-.task-date {
-    font-size: 0.8em;
-    color: #aaa;
-    margin-right: 5px;
-}
-
-/* Tarefa Concluída */
-.task-completed {
-    opacity: 0.7;
-    background-color: #343740 !important; 
-    text-decoration: line-through;
-}
-
-.task-completed .task-text {
-    color: #999;
-}
-
-/* Botão de Excluir */
-.delete-btn {
-    background: none;
-    color: #e74c3c;
-    border: none;
-    padding: 5px 10px;
-    margin-left: 10px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: color 0.2s;
-}
-
-.delete-btn:hover {
-    color: #f96658;
-}
-
-/* CLASSES DE ALERTA PARA DATA LIMITE */
-.task-item.due-expired {
-    background-color: #583e41 !important; 
-    border-left-color: #e74c3c !important; 
-}
-
-.task-item.due-near {
-    background-color: #58533c !important; 
-    border-left-color: #f39c12 !important; 
-}
-
-/* Destaque da Data Limite - APARECE DENTRO do .task-text */
-.due-date {
-    font-size: 0.9em;
-    font-weight: bold;
-    margin-left: 15px; 
-    padding: 3px 8px;
-    border-radius: 4px;
-    background-color: #555b66;
-    white-space: nowrap; 
-    font-style: normal;
-}
-
-.due-expired .due-date {
-    background-color: #e74c3c; 
-    color: white;
-}
-
-.due-near .due-date {
-    background-color: #f39c12; 
-    color: #1e1e1e;
-}
-
-
-/* Histórico */
-#history-container {
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #555b66;
-}
-
-#history-container h3 {
-    color: #61dafb;
-}
-
-#history-container details {
-    margin-bottom: 10px;
-    background-color: #343740;
-    padding: 10px;
-    border-radius: 6px;
-}
-
-#history-container summary {
-    cursor: pointer;
-    color: #ccc;
-    padding: 5px 0;
-}
-
-#history-container ul {
-    list-style: none;
-    padding-left: 0;
-    margin-top: 10px;
-}
-
-.history-item-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 0;
-    border-bottom: 1px dotted #444;
-}
-
-.history-delete-btn {
-    color: #999;
-}
-.history-delete-btn:hover {
-    color: #e74c3c;
-}
-
-/* ---------------------------------- */
-/* SUBTAREFAS STYLES */
-/* ---------------------------------- */
-
-.subtask-area {
-    width: 100%;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px dashed #555b66;
-}
-
-.subtask-list {
-    list-style: none;
-    padding: 0;
-    margin-top: 5px;
-}
-
-.subtask-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 5px 0;
-    font-size: 0.9em;
-    color: #ccc;
-}
-
-.subtask-text {
-    flex-grow: 1;
-    margin-left: 5px;
-}
-
-.subtask-item input[type="checkbox"] {
-    width: 15px;
-    height: 15px;
-    cursor: pointer;
-}
-
-.subtask-completed .subtask-text {
-    text-decoration: line-through;
-    color: #888;
-}
-
-/* Input para adicionar nova subtarefa */
-.new-subtask-input {
-    width: calc(100% - 70px); 
-    padding: 6px;
-    border: 1px solid #61dafb;
-    border-radius: 4px;
-    background-color: #555b66;
-    color: #f0f0f0;
-    margin-right: 5px;
-    font-size: 0.9em;
-}
-
-.add-subtask-btn, .delete-subtask-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #61dafb;
-    margin-left: 5px;
-    padding: 3px;
-    font-size: 0.9em;
-}
-
-.delete-subtask-btn {
-    color: #e74c3c;
-    opacity: 0.8;
-}
-
-/* Ícone/Botão de expansão */
-.subtask-expander {
-    margin-left: 10px;
-    background: none;
-    border: none;
-    color: #61dafb;
-    cursor: pointer;
-    font-size: 1.1em;
-    font-weight: bold;
-    transition: transform 0.2s;
-}
-
-.subtask-expander.expanded {
-    transform: rotate(90deg); /* Gira o ícone (►) quando expandido */
-}
-
-
-/* Responsividade */
 @media (max-width: 600px) {
-    #input-area {
-        flex-direction: column;
-    }
-    #input-area input,
-    #input-area select,
-    #input-area button {
-        width: 100%;
-        margin-right: 0;
-    }
-    #controls-area {
-        flex-direction: column;
-        gap: 15px;
-    }
-    #action-buttons {
-        width: 100%;
-        justify-content: space-between;
-    }
-    #filter-select, #clear-completed-btn {
-        flex-grow: 1;
-        text-align: center;
-    }
-    .task-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .task-content {
-        flex-direction: column;
-        align-items: flex-start;
-        width: 100%;
-        gap: 5px;
-    }
-    .task-content > * {
-        margin-bottom: 5px;
-    }
-    .delete-btn {
-        margin-top: 10px;
-        width: 100%;
-        text-align: right;
-    }
-    .new-subtask-input {
-        width: calc(100% - 100px); /* Ajuste para caber em telas menores */
-    }
+    #input-area { flex-direction: column; }
+    .task-item { flex-direction: column; align-items: flex-start; }
 }
