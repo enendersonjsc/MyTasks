@@ -82,7 +82,7 @@ header h1 { color: #61dafb; text-align: center; }
 .subtask-expander { background: none; border: none; color: #61dafb; cursor: pointer; transition: 0.2s; font-size: 1.2em; }
 .subtask-expander.expanded { transform: rotate(90deg); }
 
-/* HISTORICO */
+/* HISTORICOo */
 #history-container { margin-top: 30px; border-top: 2px solid #555; padding-top: 15px; }
 #history-container details { background: #343740; padding: 10px; border-radius: 5px; margin-bottom: 8px; }
 .history-item-line { font-size: 0.85em; padding: 3px 0; border-bottom: 1px solid #444; color: #ccc; }
