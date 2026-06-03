@@ -35,6 +35,16 @@ header h1 { color: #61dafb; text-align: center; }
 #pause-btn { background-color: #f39c12; }
 #reset-btn { background-color: #e74c3c; color: white; }
 
+/* ESTILIZAÇÃO DOS SELETORES DE SOM */
+#sound-selectors {
+    margin-top: 15px; display: flex; justify-content: space-around;
+    font-size: 0.85em; background: rgba(0,0,0,0.15); padding: 8px; border-radius: 6px;
+}
+.sound-control-group { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+#sound-selectors select {
+    background: #555b66; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;
+}
+
 /* INPUTS */
 #input-area { display: flex; gap: 10px; margin-bottom: 20px; }
 #task-input, #priority-select, #due-date-input, .task-priority-inline { 
@@ -49,7 +59,7 @@ header h1 { color: #61dafb; text-align: center; }
 .count-media { background-color: #f39c12; color: #222; }
 .count-baixa { background-color: #2ecc71; color: #222; }
 
-/* TASK LIST - CORES DE FUNDO COMPLETAS */
+/* TASK LIST */
 #task-list { list-style: none; padding: 0; }
 .task-item {
     display: flex; flex-direction: column; padding: 15px; margin-bottom: 10px;
@@ -67,10 +77,9 @@ header h1 { color: #61dafb; text-align: center; }
 
 .task-main-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .task-info { display: flex; align-items: center; gap: 10px; flex-grow: 1; }
-.task-text { flex-grow: 1; font-weight: 500; cursor: dblclick; padding: 2px 5px; border-radius: 4px; }
+.task-text { flex-grow: 1; font-weight: 500; padding: 2px 5px; border-radius: 4px; }
 .task-text:hover { background: rgba(255,255,255,0.1); }
 
-/* INPUT DE EDIÇÃO EM TEMPO REAL */
 .edit-task-input {
     flex-grow: 1; background: #282c34; color: white; border: 1px solid #61dafb;
     padding: 2px 5px; font-size: 1em; border-radius: 4px; font-family: inherit;
