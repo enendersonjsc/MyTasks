@@ -59,7 +59,6 @@ header h1 { color: #61dafb; text-align: center; }
 .task-item:active { cursor: grabbing; }
 .task-item.dragging { opacity: 0.4; transform: scale(0.95); }
 
-/* VOLTANDO COM AS CORES CLARAS NO FUNDO TODO */
 .task-alta { background-color: rgba(231, 76, 60, 0.2); border-left-color: #e74c3c; }
 .task-media { background-color: rgba(243, 156, 18, 0.2); border-left-color: #f39c12; }
 .task-baixa { background-color: rgba(46, 204, 113, 0.2); border-left-color: #2ecc71; }
@@ -68,7 +67,14 @@ header h1 { color: #61dafb; text-align: center; }
 
 .task-main-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
 .task-info { display: flex; align-items: center; gap: 10px; flex-grow: 1; }
-.task-text { flex-grow: 1; font-weight: 500; }
+.task-text { flex-grow: 1; font-weight: 500; cursor: dblclick; padding: 2px 5px; border-radius: 4px; }
+.task-text:hover { background: rgba(255,255,255,0.1); }
+
+/* INPUT DE EDIÇÃO EM TEMPO REAL */
+.edit-task-input {
+    flex-grow: 1; background: #282c34; color: white; border: 1px solid #61dafb;
+    padding: 2px 5px; font-size: 1em; border-radius: 4px; font-family: inherit;
+}
 
 .task-priority-inline { padding: 2px 5px; font-size: 0.8em; margin: 0 10px; background: rgba(0,0,0,0.3); }
 
@@ -78,11 +84,10 @@ header h1 { color: #61dafb; text-align: center; }
 .subtask-completed { text-decoration: line-through; color: #aaa; }
 .new-subtask-input { background: rgba(0,0,0,0.2); border: 1px solid #61dafb; color: white; padding: 4px; border-radius: 4px; width: 60%; }
 
-/* EXPANDIR */
 .subtask-expander { background: none; border: none; color: #61dafb; cursor: pointer; transition: 0.2s; font-size: 1.2em; }
 .subtask-expander.expanded { transform: rotate(90deg); }
 
-/* HISTORICOo */
+/* HISTORICO */
 #history-container { margin-top: 30px; border-top: 2px solid #555; padding-top: 15px; }
 #history-container details { background: #343740; padding: 10px; border-radius: 5px; margin-bottom: 8px; }
 .history-item-line { font-size: 0.85em; padding: 3px 0; border-bottom: 1px solid #444; color: #ccc; }
