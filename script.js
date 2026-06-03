@@ -5,14 +5,14 @@ const HISTORY_KEY = 'todoHistory';
 let currentFilter = 'all';
 
 // =======================================================
-// === POMODORO TIMER (LÓGICA DE TEMPO REAL) ===
+// === POMODORO TIMER (LÓGICA CORRIGIDA COM PAUSA) ===
 // =======================================================
 let timerInterval;
-let timeRemaining = 25 * 60; // Inicia com 25 min
+let timeRemaining = 25 * 60; 
 let isPaused = true;
-let currentPhase = 'pomodoro';
+let currentPhase = 'pomodoro'; // 'pomodoro', 'short-break', 'long-break'
 let pomodoroCycles = 0;
-let endTime; // Marca o momento exato em que o ciclo deve terminar
+let endTime; 
 
 const POMODORO_TIME = 25 * 60;
 const SHORT_BREAK_TIME = 5 * 60;
@@ -40,13 +40,11 @@ function startTimer() {
     if (!isPaused) return;
     isPaused = false;
 
-    // Define o momento exato do fim baseado no que restava
     endTime = Date.now() + (timeRemaining * 1000);
 
     document.getElementById('start-btn').disabled = true;
     document.getElementById('pause-btn').disabled = false;
 
-    // Atualiza a cada 200ms para uma transição suave e precisa
     timerInterval = setInterval(() => {
         const now = Date.now();
         const difference = Math.round((endTime - now) / 1000);
@@ -55,7 +53,7 @@ function startTimer() {
             timeRemaining = 0;
             updateTimerDisplay();
             clearInterval(timerInterval);
-            handlePhaseEnd();
+            handlePhaseEnd(); // Alterna a fase e força a parada para o usuário aceitar
         } else {
             timeRemaining = difference;
             updateTimerDisplay();
@@ -79,19 +77,25 @@ function resetTimer() {
 }
 
 function handlePhaseEnd() {
-    alert("Ciclo finalizado!");
+    // 1. Forçar estado de pausado nos botões antes do alerta para evitar loops indesejados
+    isPaused = true;
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('pause-btn').disabled = true;
+
+    // 2. Transiciona as fases internamente
     if (currentPhase === 'pomodoro') {
         pomodoroCycles++;
         currentPhase = (pomodoroCycles % 4 === 0) ? 'long-break' : 'short-break';
         timeRemaining = (currentPhase === 'long-break') ? LONG_BREAK_TIME : SHORT_BREAK_TIME;
+        alert("Ciclo de Foco finalizado! Hora de descansar. Clique em 'Iniciar' para começar a pausa.");
     } else {
         currentPhase = 'pomodoro';
         timeRemaining = POMODORO_TIME;
+        alert("Pausa finalizada! Pronto para focar novamente? Clique em 'Iniciar'.");
     }
+    
+    // 3. Atualiza a tela com o novo tempo estático (esperando o play do usuário)
     updateTimerDisplay();
-    // Reinicia automaticamente o próximo ciclo (pausado por segurança)
-    isPaused = true;
-    startTimer();
 }
 
 // =======================================================
@@ -142,6 +146,7 @@ function addTask() {
     renderTasks();
 }
 
+// ATUALIZAR PRIORIDADE
 function updateTaskPriority(id, newPriority) {
     const tasks = getTasksFromStorage();
     const task = tasks.find(t => t.id === id);
@@ -150,6 +155,18 @@ function updateTaskPriority(id, newPriority) {
         saveTasksToStorage(tasks);
         renderTasks();
     }
+}
+
+// NOVA FUNÇÃO: SALVAR EDIÇÃO DE TEXTO DA TAREFA
+function updateTaskText(id, newText) {
+    if (!newText.trim()) return renderTasks();
+    const tasks = getTasksFromStorage();
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+        task.text = newText.trim();
+        saveTasksToStorage(tasks);
+    }
+    renderTasks();
 }
 
 function toggleComplete(id) {
@@ -199,7 +216,11 @@ function renderTasks() {
             <div class="task-main-row">
                 <div class="task-info">
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleComplete(${t.id})">
-                    <span class="task-text">${t.text} ${isOld ? '⚠️' : ''}</span>
+                    
+                    <span class="task-text" id="text-${t.id}" ondblclick="enableTaskEdit(${t.id}, '${t.text.replace(/'/g, "\\'")}')">
+                        ${t.text} ${isOld ? '⚠️' : ''}
+                    </span>
+                    
                     ${!t.completed ? `
                         <select class="task-priority-inline" onchange="updateTaskPriority(${t.id}, this.value)">
                             <option value="alta" ${t.priority === 'alta' ? 'selected' : ''}>Alta</option>
@@ -234,6 +255,31 @@ function renderTasks() {
         list.appendChild(li);
     });
     updateCounters(tasks);
+}
+
+// NOVA FUNÇÃO: ATIVAR CAMPO DE TEXTO AO DAR DUPLO CLIQUE
+function enableTaskEdit(id, currentText) {
+    const span = document.getElementById(`text-${id}`);
+    if (!span) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'edit-task-input';
+    input.value = currentText;
+
+    // Desativa temporariamente o arrastar enquanto edita
+    span.closest('.task-item').draggable = false;
+
+    // Evento de salvar ao sair ou ao dar Enter
+    input.onblur = () => updateTaskText(id, input.value);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') renderTasks(); // Cancela
+    };
+
+    span.innerHTML = '';
+    span.appendChild(input);
+    input.focus();
 }
 
 function toggleExpand(id) {
