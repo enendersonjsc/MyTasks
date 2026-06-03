@@ -22,6 +22,27 @@
         <div id="timer-status">
             Ciclo: <span id="cycle-count">0</span> / 4 | Estado: <span id="current-phase">Pronto</span>
         </div>
+        
+        <div id="sound-selectors">
+            <div class="sound-control-group">
+                <label for="focus-sound-select">Fim do Foco:</label>
+                <select id="focus-sound-select" onchange="saveSoundPreferences(); testSound(this.value)">
+                    <option value="beep">Beep Rápido</option>
+                    <option value="alarme">Alarme Duplo</option>
+                    <option value="gongo">Gongo Zen</option>
+                    <option value="none">Silencioso</option>
+                </select>
+            </div>
+            <div class="sound-control-group">
+                <label for="break-sound-select">Fim da Pausa:</label>
+                <select id="break-sound-select" onchange="saveSoundPreferences(); testSound(this.value)">
+                    <option value="beep">Beep Rápido</option>
+                    <option value="alarme">Alarme Duplo</option>
+                    <option value="gongo">Gongo Zen</option>
+                    <option value="none">Silencioso</option>
+                </select>
+            </div>
+        </div>
     </div>
 
     <main>
