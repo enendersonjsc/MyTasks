@@ -2,21 +2,94 @@
 const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_KEY = 'todoHistory';
+const SOUND_PREF_KEY = 'pomodoroSoundPrefs';
 let currentFilter = 'all';
 
 // =======================================================
-// === POMODORO TIMER (LÓGICA CORRIGIDA COM PAUSA) ===
+// === POMODORO TIMER & SINTETIZADOR DE SOM ===
 // =======================================================
 let timerInterval;
 let timeRemaining = 25 * 60; 
 let isPaused = true;
-let currentPhase = 'pomodoro'; // 'pomodoro', 'short-break', 'long-break'
+let currentPhase = 'pomodoro'; 
 let pomodoroCycles = 0;
 let endTime; 
 
 const POMODORO_TIME = 25 * 60;
 const SHORT_BREAK_TIME = 5 * 60;
 const LONG_BREAK_TIME = 15 * 60;
+
+// MOTOR DE ÁUDIO SINTETIZADO (WEB AUDIO API)
+function playSynthesizedSound(type) {
+    if (type === 'none') return;
+
+    // Cria o contexto de áudio do navegador
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+
+    if (type === 'beep') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime); // Frequência média
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); // Esmaece rápido
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+    } 
+    else if (type === 'alarme') {
+        // Bi-bi rápido usando encadeamento de tempo
+        [0, 0.2].forEach(delay => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'square'; // Onda quadrada (som mais digital)
+            osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
+            gain.gain.setValueAtTime(0.05, ctx.currentTime + delay);
+            gain.gain.setValueAtTime(0, ctx.currentTime + delay + 0.1);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + delay);
+            osc.stop(ctx.currentTime + delay + 0.12);
+        });
+    } 
+    else if (type === 'gongo') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle'; // Onda suave e aveludada
+        osc.frequency.setValueAtTime(220, ctx.currentTime); // Tom grave e relaxante
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5); // Eco longo
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 1.5);
+    }
+}
+
+// Ouvir o som imediatamente ao mudar o seletor na tela
+function testSound(type) {
+    playSynthesizedSound(type);
+}
+
+function saveSoundPreferences() {
+    const prefs = {
+        focus: document.getElementById('focus-sound-select').value,
+        break: document.getElementById('break-sound-select').value
+    };
+    localStorage.setItem(SOUND_PREF_KEY, JSON.stringify(prefs));
+}
+
+function loadSoundPreferences() {
+    const saved = localStorage.getItem(SOUND_PREF_KEY);
+    if (saved) {
+        const prefs = JSON.parse(saved);
+        document.getElementById('focus-sound-select').value = prefs.focus || 'beep';
+        document.getElementById('break-sound-select').value = prefs.break || 'alarme';
+    }
+}
 
 function updateTimerDisplay() {
     const m = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
@@ -39,9 +112,7 @@ function updateTimerDisplay() {
 function startTimer() {
     if (!isPaused) return;
     isPaused = false;
-
     endTime = Date.now() + (timeRemaining * 1000);
-
     document.getElementById('start-btn').disabled = true;
     document.getElementById('pause-btn').disabled = false;
 
@@ -53,7 +124,7 @@ function startTimer() {
             timeRemaining = 0;
             updateTimerDisplay();
             clearInterval(timerInterval);
-            handlePhaseEnd(); // Alterna a fase e força a parada para o usuário aceitar
+            handlePhaseEnd(); 
         } else {
             timeRemaining = difference;
             updateTimerDisplay();
@@ -77,24 +148,28 @@ function resetTimer() {
 }
 
 function handlePhaseEnd() {
-    // 1. Forçar estado de pausado nos botões antes do alerta para evitar loops indesejados
     isPaused = true;
     document.getElementById('start-btn').disabled = false;
     document.getElementById('pause-btn').disabled = true;
 
-    // 2. Transiciona as fases internamente
+    const focusSound = document.getElementById('focus-sound-select').value;
+    const breakSound = document.getElementById('break-sound-select').value;
+
     if (currentPhase === 'pomodoro') {
         pomodoroCycles++;
         currentPhase = (pomodoroCycles % 4 === 0) ? 'long-break' : 'short-break';
         timeRemaining = (currentPhase === 'long-break') ? LONG_BREAK_TIME : SHORT_BREAK_TIME;
+        
+        playSynthesizedSound(focusSound); // Som escolhido para o fim do foco
         alert("Ciclo de Foco finalizado! Hora de descansar. Clique em 'Iniciar' para começar a pausa.");
     } else {
         currentPhase = 'pomodoro';
         timeRemaining = POMODORO_TIME;
+        
+        playSynthesizedSound(breakSound); // Som escolhido para o fim da pausa
         alert("Pausa finalizada! Pronto para focar novamente? Clique em 'Iniciar'.");
     }
     
-    // 3. Atualiza a tela com o novo tempo estático (esperando o play do usuário)
     updateTimerDisplay();
 }
 
@@ -146,7 +221,6 @@ function addTask() {
     renderTasks();
 }
 
-// ATUALIZAR PRIORIDADE
 function updateTaskPriority(id, newPriority) {
     const tasks = getTasksFromStorage();
     const task = tasks.find(t => t.id === id);
@@ -157,7 +231,6 @@ function updateTaskPriority(id, newPriority) {
     }
 }
 
-// NOVA FUNÇÃO: SALVAR EDIÇÃO DE TEXTO DA TAREFA
 function updateTaskText(id, newText) {
     if (!newText.trim()) return renderTasks();
     const tasks = getTasksFromStorage();
@@ -216,11 +289,9 @@ function renderTasks() {
             <div class="task-main-row">
                 <div class="task-info">
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleComplete(${t.id})">
-                    
                     <span class="task-text" id="text-${t.id}" ondblclick="enableTaskEdit(${t.id}, '${t.text.replace(/'/g, "\\'")}')">
                         ${t.text} ${isOld ? '⚠️' : ''}
                     </span>
-                    
                     ${!t.completed ? `
                         <select class="task-priority-inline" onchange="updateTaskPriority(${t.id}, this.value)">
                             <option value="alta" ${t.priority === 'alta' ? 'selected' : ''}>Alta</option>
@@ -257,7 +328,6 @@ function renderTasks() {
     updateCounters(tasks);
 }
 
-// NOVA FUNÇÃO: ATIVAR CAMPO DE TEXTO AO DAR DUPLO CLIQUE
 function enableTaskEdit(id, currentText) {
     const span = document.getElementById(`text-${id}`);
     if (!span) return;
@@ -267,14 +337,12 @@ function enableTaskEdit(id, currentText) {
     input.className = 'edit-task-input';
     input.value = currentText;
 
-    // Desativa temporariamente o arrastar enquanto edita
     span.closest('.task-item').draggable = false;
 
-    // Evento de salvar ao sair ou ao dar Enter
     input.onblur = () => updateTaskText(id, input.value);
     input.onkeydown = (e) => {
         if (e.key === 'Enter') input.blur();
-        if (e.key === 'Escape') renderTasks(); // Cancela
+        if (e.key === 'Escape') renderTasks();
     };
 
     span.innerHTML = '';
@@ -364,6 +432,7 @@ function clearCompletedTasks() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadSoundPreferences(); // Carrega o áudio preferido do usuário
     updateTimerDisplay();
     renderTasks();
     displayHistory();
