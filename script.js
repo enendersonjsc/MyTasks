@@ -1,13 +1,13 @@
 // --- ESTADO INICIAL & PERSISTÊNCIA ---
 let state = JSON.parse(localStorage.getItem('mytasks_data')) || {
-    projects: [], // [{ id, name, color, parentId }]
-    tasks: [],    // [{ id, projectId, text, priority, completed, createdAt, updatedAt, completedAt }]
+    projects: [],
+    tasks: [],
     activeContext: { type: 'inbox', projectId: null },
     audioSettings: { focus: 'double-alarm', break: 'beep' }
 };
 
 let targetParentProjectId = null;
-const MAX_DEPTH = 3; // Limite de 3 níveis para manter UX limpa
+const MAX_DEPTH = 3;
 
 // LIMPEZA AUTOMÁTICA EM SEGUNDO PLANO (REMOVE CONCLUÍDAS COM MAIS DE 7 DIAS)
 function cleanupOldCompletedTasks() {
@@ -49,7 +49,7 @@ soundFocusSelect.value = state.audioSettings?.focus || 'double-alarm';
 const soundBreakSelect = document.getElementById('sound-break');
 soundBreakSelect.value = state.audioSettings?.break || 'beep';
 
-// --- SINTETIZADOR DE ÁUDIO (Web Audio API) ---
+// --- SINTETIZADOR DE ÁUDIO ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
@@ -166,7 +166,7 @@ function render() {
     renderTasks();
 }
 
-// --- SIDEBAR (ÁRVORE DE PROJETOS DE ATÉ 3 NÍVEIS) ---
+// --- SIDEBAR E ESTRUTURA DE PROJETOS ---
 function renderSidebar() {
     projectsTreeEl.innerHTML = '';
     renderProjectTree(null, projectsTreeEl, 1);
@@ -190,8 +190,12 @@ function renderProjectTree(parentId, container, depth) {
 
         row.innerHTML = `
             <span class="project-bullet" style="background-color: ${proj.color}"></span>
-            <span class="project-name">${proj.name}</span>
-            ${canHaveSubprojects ? `<button class="btn-add-sub" onclick="event.stopPropagation(); openNewProjectModal('${proj.id}')" title="Adicionar Subprojeto">+</button>` : ''}
+            <span class="project-name" ondblclick="event.stopPropagation(); editProject('${proj.id}')" title="Duplo clique para renomear">${proj.name}</span>
+            <div class="project-actions">
+                <button class="btn-action" onclick="event.stopPropagation(); editProject('${proj.id}')" title="Renomear Projeto">✏️</button>
+                ${canHaveSubprojects ? `<button class="btn-action" onclick="event.stopPropagation(); openNewProjectModal('${proj.id}')" title="Adicionar Subprojeto">+</button>` : ''}
+                <button class="btn-action delete" onclick="event.stopPropagation(); closeProject('${proj.id}')" title="Encerrar Projeto">✕</button>
+            </div>
         `;
 
         itemContainer.appendChild(row);
@@ -199,6 +203,37 @@ function renderProjectTree(parentId, container, depth) {
 
         renderProjectTree(proj.id, itemContainer, depth + 1);
     });
+}
+
+// RENOMEAR PROJETO OU SUBPROJETO
+function editProject(projectId) {
+    const proj = state.projects.find(p => p.id === projectId);
+    if (!proj) return;
+
+    const newName = prompt("Editar nome do projeto:", proj.name);
+    if (newName !== null && newName.trim() !== "") {
+        proj.name = newName.trim();
+        saveData();
+    }
+}
+
+// ENCERRAR/EXCLUIR PROJETO EM CASCATA
+function closeProject(projectId) {
+    const proj = state.projects.find(p => p.id === projectId);
+    if (!proj) return;
+
+    const allRelatedProjectIds = getAllSubProjectIds(projectId);
+    
+    if (confirm(`Deseja encerrar o projeto "${proj.name}"?\nIsso excluirá o projeto, seus subprojetos e todas as tarefas vinculadas.`)) {
+        state.projects = state.projects.filter(p => !allRelatedProjectIds.includes(p.id));
+        state.tasks = state.tasks.filter(t => !allRelatedProjectIds.includes(t.projectId));
+
+        if (state.activeContext.type === 'project' && allRelatedProjectIds.includes(state.activeContext.projectId)) {
+            setContext('inbox');
+        } else {
+            saveData();
+        }
+    }
 }
 
 function getBreadcrumbPath(projectId) {
@@ -262,7 +297,7 @@ btnSaveProject.onclick = () => {
     saveData();
 };
 
-// --- OBTÊM SUBPROJETOS (ROLL-UP) ---
+// OBTÊM SUBPROJETOS (ROLL-UP)
 function getAllSubProjectIds(projectId) {
     let ids = [projectId];
     const children = state.projects.filter(p => p.parentId === projectId);
@@ -301,7 +336,6 @@ function renderTasks() {
 
     let filteredTasks = [];
 
-    // 1. Filtragem por Contexto
     if (state.activeContext.type === 'inbox') {
         filteredTasks = state.tasks.filter(t => !t.projectId);
     } else if (state.activeContext.type === 'project') {
@@ -314,7 +348,6 @@ function renderTasks() {
         return;
     }
 
-    // 2. Ordenação: Tarefas ativas primeiro, concluídas (nos últimos 7 dias) por último
     filteredTasks.sort((a, b) => a.completed - b.completed);
 
     filteredTasks.forEach(task => {
