@@ -3,96 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTasks - Gerenciador de Projetos e Tarefas</title>
-    <link rel="icon" type="image/png" href="favicon.png">
+    <title>Gerenciador de Tarefas e Projetos</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- BARRA LATERAL (SIDEBAR) -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>MyTasks</h2>
-                <button id="btn-new-project" class="btn-icon" title="Novo Projeto">+</button>
-            </div>
 
-            <nav class="projects-nav">
-                <!-- Categoria Padrão -->
-                <div class="nav-item active" data-type="inbox">
-                    <span class="icon">📥</span>
-                    <span>Caixa de Entrada</span>
-                </div>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <h2>Produtividade</h2>
+        
+        <div class="nav-item active" data-type="inbox">
+            📥 Caixa de Entrada
+        </div>
 
-                <!-- Lista Dinâmica de Projetos/Subprojetos -->
-                <div id="projects-list"></div>
-            </nav>
-        </aside>
+        <div class="projects-header">
+            <span>Projetos</span>
+            <button class="btn-add-main" id="btn-new-project" title="Criar Projeto Principal">+</button>
+        </div>
 
-        <!-- ÁREA PRINCIPAL -->
-        <main class="main-content">
-            <!-- BLOCO DO POMODORO -->
-            <section class="pomodoro-section">
+        <div class="projects-tree" id="projects-tree">
+            <!-- Projetos e Subprojetos injetados via JS -->
+        </div>
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="main-content">
+        <!-- BARRA SUPERIOR -->
+        <header class="header-bar">
+            <h1 class="context-title" id="current-context-title">📥 Caixa de Entrada</h1>
+
+            <!-- POMODORO WIDGET -->
+            <div class="pomodoro-card">
                 <div class="timer-display" id="timer">25:00</div>
-                <div class="pomodoro-controls">
-                    <button id="start-btn">Iniciar</button>
-                    <button id="pause-btn" disabled>Pausar</button>
-                    <button id="reset-btn">Resetar</button>
-                </div>
-                <div class="audio-settings">
-                    <label>Foco: 
-                        <select id="sound-focus">
-                            <option value="double-alarm" selected>Alarme Duplo</option>
-                            <option value="beep">Beep Rápido</option>
-                            <option value="zen">Gongo Zen</option>
-                            <option value="silent">Silencioso</option>
-                        </select>
-                    </label>
-                    <label>Pausa: 
-                        <select id="sound-break">
-                            <option value="beep" selected>Beep Rápido</option>
-                            <option value="double-alarm">Alarme Duplo</option>
-                            <option value="zen">Gongo Zen</option>
-                            <option value="silent">Silencioso</option>
-                        </select>
-                    </label>
-                </div>
-            </section>
+                <button class="pomo-btn" id="start-btn">Iniciar</button>
+                <button class="pomo-btn" id="pause-btn" disabled>Pausar</button>
+                <button class="pomo-btn" id="reset-btn">Reset</button>
 
-            <!-- CABEÇALHO DO CONTEXTO ATUAL -->
-            <header class="context-header">
-                <h1 id="current-context-title">📥 Caixa de Entrada</h1>
-            </header>
-
-            <!-- FORMULÁRIO DE CRIAR TAREFA -->
-            <section class="task-form-section">
-                <form id="task-form">
-                    <input type="text" id="task-input" placeholder="O que precisa ser feito?" required>
-                    <select id="task-priority">
-                        <option value="baixa">Baixa</option>
-                        <option value="media" selected>Média</option>
-                        <option value="alta">Alta</option>
+                <div class="pomo-selects">
+                    <select id="sound-focus" title="Som Foco">
+                        <option value="double-alarm">Alarme</option>
+                        <option value="beep">Beep</option>
+                        <option value="zen">Zen</option>
+                        <option value="silent">Mudo</option>
                     </select>
-                    <button type="submit">Adicionar</button>
-                </form>
-            </section>
+                    <select id="sound-break" title="Som Pausa">
+                        <option value="beep">Beep</option>
+                        <option value="double-alarm">Alarme</option>
+                        <option value="zen">Zen</option>
+                        <option value="silent">Mudo</option>
+                    </select>
+                </div>
+            </div>
+        </header>
 
-            <!-- LISTA DE TAREFAS -->
-            <section class="tasks-section">
-                <ul id="tasks-list"></ul>
-            </section>
-        </main>
-    </div>
+        <!-- FORMULÁRIO DE TAREFAS -->
+        <form class="task-form" id="task-form">
+            <input type="text" class="task-input" id="task-input" placeholder="Adicionar nova tarefa..." required>
+            <select id="task-priority">
+                <option value="low">Baixa</option>
+                <option value="medium" selected>Média</option>
+                <option value="high">Alta</option>
+            </select>
+            <button type="submit" class="btn-submit">Adicionar</button>
+        </form>
 
-    <!-- MODAL DE CRIAR PROJETO -->
-    <div id="project-modal" class="modal hidden">
+        <!-- LISTA DE TAREFAS -->
+        <ul class="tasks-list" id="tasks-list">
+            <!-- Tarefas injetadas via JS -->
+        </ul>
+    </main>
+
+    <!-- MODAL DE NOVO PROJETO/SUBPROJETO -->
+    <div class="modal hidden" id="project-modal">
         <div class="modal-content">
-            <h3>Novo Projeto</h3>
-            <input type="text" id="project-name-input" placeholder="Nome do Projeto">
-            <label for="project-color-input">Cor do Projeto:</label>
-            <input type="color" id="project-color-input" value="#3498db">
+            <h3 id="modal-title">Novo Projeto</h3>
+            <input type="text" id="project-name-input" placeholder="Nome do projeto..." required>
+            <label style="color: #888; font-size: 0.85rem;">Cor do Projeto:</label>
+            <input type="color" id="project-color-input" value="#3498db" style="width: 100%; height: 35px; cursor: pointer;">
+            
             <div class="modal-actions">
-                <button id="btn-cancel-project">Cancelar</button>
-                <button id="btn-save-project">Salvar</button>
+                <button class="pomo-btn" style="background-color: #555;" id="btn-cancel-project">Cancelar</button>
+                <button class="btn-submit" id="btn-save-project">Salvar</button>
             </div>
         </div>
     </div>
