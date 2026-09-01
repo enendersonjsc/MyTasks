@@ -3,90 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTasks - Gerenciador de Tarefas</title>
-    <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTasks - Gerenciador de Tarefas</title>
+    <title>MyTasks - Gerenciador de Projetos e Tarefas</title>
     <link rel="icon" type="image/png" href="favicon.png">
-    
-    <link rel="stylesheet" href="style.css">
-</head>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <header>
-        <h1>MyTasks</h1>
-    </header>
-
-    <div id="pomodoro-timer">
-        <div id="timer-display">25:00</div>
-        <div id="timer-controls">
-            <button id="start-btn">Iniciar</button>
-            <button id="pause-btn" disabled>Pausar</button>
-            <button id="reset-btn">Resetar</button>
-        </div>
-        <div id="timer-status">
-            Ciclo: <span id="cycle-count">0</span> / 4 | Estado: <span id="current-phase">Pronto</span>
-        </div>
-        
-        <div id="sound-selectors">
-            <div class="sound-control-group">
-                <label for="focus-sound-select">Fim do Foco:</label>
-                <select id="focus-sound-select" onchange="saveSoundPreferences(); testSound(this.value)">
-                    <option value="beep">Beep Rápido</option>
-                    <option value="alarme">Alarme Duplo</option>
-                    <option value="gongo">Gongo Zen</option>
-                    <option value="none">Silencioso</option>
-                </select>
+    <div class="app-container">
+        <!-- BARRA LATERAL (SIDEBAR) -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>MyTasks</h2>
+                <button id="btn-new-project" class="btn-icon" title="Novo Projeto">+</button>
             </div>
-            <div class="sound-control-group">
-                <label for="break-sound-select">Fim da Pausa:</label>
-                <select id="break-sound-select" onchange="saveSoundPreferences(); testSound(this.value)">
-                    <option value="beep">Beep Rápido</option>
-                    <option value="alarme">Alarme Duplo</option>
-                    <option value="gongo">Gongo Zen</option>
-                    <option value="none">Silencioso</option>
-                </select>
+
+            <nav class="projects-nav">
+                <!-- Categoria Padrão -->
+                <div class="nav-item active" data-type="inbox">
+                    <span class="icon">📥</span>
+                    <span>Caixa de Entrada</span>
+                </div>
+
+                <!-- Lista Dinâmica de Projetos/Subprojetos -->
+                <div id="projects-list"></div>
+            </nav>
+        </aside>
+
+        <!-- ÁREA PRINCIPAL -->
+        <main class="main-content">
+            <!-- BLOCO DO POMODORO -->
+            <section class="pomodoro-section">
+                <div class="timer-display" id="timer">25:00</div>
+                <div class="pomodoro-controls">
+                    <button id="start-btn">Iniciar</button>
+                    <button id="pause-btn" disabled>Pausar</button>
+                    <button id="reset-btn">Resetar</button>
+                </div>
+                <div class="audio-settings">
+                    <label>Foco: 
+                        <select id="sound-focus">
+                            <option value="double-alarm" selected>Alarme Duplo</option>
+                            <option value="beep">Beep Rápido</option>
+                            <option value="zen">Gongo Zen</option>
+                            <option value="silent">Silencioso</option>
+                        </select>
+                    </label>
+                    <label>Pausa: 
+                        <select id="sound-break">
+                            <option value="beep" selected>Beep Rápido</option>
+                            <option value="double-alarm">Alarme Duplo</option>
+                            <option value="zen">Gongo Zen</option>
+                            <option value="silent">Silencioso</option>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <!-- CABEÇALHO DO CONTEXTO ATUAL -->
+            <header class="context-header">
+                <h1 id="current-context-title">📥 Caixa de Entrada</h1>
+            </header>
+
+            <!-- FORMULÁRIO DE CRIAR TAREFA -->
+            <section class="task-form-section">
+                <form id="task-form">
+                    <input type="text" id="task-input" placeholder="O que precisa ser feito?" required>
+                    <select id="task-priority">
+                        <option value="baixa">Baixa</option>
+                        <option value="media" selected>Média</option>
+                        <option value="alta">Alta</option>
+                    </select>
+                    <button type="submit">Adicionar</button>
+                </form>
+            </section>
+
+            <!-- LISTA DE TAREFAS -->
+            <section class="tasks-section">
+                <ul id="tasks-list"></ul>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL DE CRIAR PROJETO -->
+    <div id="project-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Novo Projeto</h3>
+            <input type="text" id="project-name-input" placeholder="Nome do Projeto">
+            <label for="project-color-input">Cor do Projeto:</label>
+            <input type="color" id="project-color-input" value="#3498db">
+            <div class="modal-actions">
+                <button id="btn-cancel-project">Cancelar</button>
+                <button id="btn-save-project">Salvar</button>
             </div>
         </div>
     </div>
-
-    <main>
-        <div id="input-area">
-            <input type="text" id="task-input" placeholder="Nova tarefa...">
-            <input type="date" id="due-date-input" title="Data Limite (Opcional)">
-            <select id="priority-select">
-                <option value="alta">Alta</option>
-                <option value="media">Média</option>
-                <option value="baixa">Baixa</option>
-            </select>
-            <button onclick="addTask()">Adicionar</button>
-        </div>
-
-        <div id="controls-area">
-            <div id="priority-counts">
-                <span id="count-alta" class="priority-count count-alta">Alta: 0</span>
-                <span id="count-media" class="priority-count count-media">Média: 0</span>
-                <span id="count-baixa" class="priority-count count-baixa">Baixa: 0</span>
-            </div>
-
-            <div id="action-buttons">
-                <select id="filter-select" onchange="setFilter(this.value)">
-                    <option value="all">Mostrar Tudo (Manual)</option>
-                    <option value="alta">Prioridade Alta</option>
-                    <option value="media">Prioridade Média</option>
-                    <option value="baixa">Prioridade Baixa</option>
-                </select>
-                <button id="clear-completed-btn" onclick="clearCompletedTasks()" disabled>Limpar Concluídas (0)</button>
-            </div>
-        </div>
-        
-        <ul id="task-list"></ul>
-
-        <div id="history-container"></div>
-    </main>
 
     <script src="script.js"></script>
 </body>
