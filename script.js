@@ -1,443 +1,345 @@
-// CONFIGURAÇÕES E ESTADO
-const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const HISTORY_KEY = 'todoHistory';
-const SOUND_PREF_KEY = 'pomodoroSoundPrefs';
-let currentFilter = 'all';
+// --- ESTRUTURA DE DADOS E ESTADO INICIAL ---
+let state = JSON.parse(localStorage.getItem('mytasks_data')) || {
+    projects: [],
+    tasks: [],
+    activeContext: { type: 'inbox', projectId: null, subprojectId: null },
+    audioSettings: { focus: 'double-alarm', break: 'beep' }
+};
 
-// =======================================================
-// === POMODORO TIMER & SINTETIZADOR DE SOM ===
-// =======================================================
-let timerInterval;
-let timeRemaining = 25 * 60; 
-let isPaused = true;
-let currentPhase = 'pomodoro'; 
-let pomodoroCycles = 0;
-let endTime; 
+// --- ELEMENTOS DO DOM ---
+const projectsListEl = document.getElementById('projects-list');
+const tasksListEl = document.getElementById('tasks-list');
+const currentContextTitle = document.getElementById('current-context-title');
+const taskForm = document.getElementById('task-form');
+const taskInput = document.getElementById('task-input');
+const taskPriority = document.getElementById('task-priority');
 
-const POMODORO_TIME = 25 * 60;
-const SHORT_BREAK_TIME = 5 * 60;
-const LONG_BREAK_TIME = 15 * 60;
+// Elementos do Modal de Projetos
+const btnNewProject = document.getElementById('btn-new-project');
+const projectModal = document.getElementById('project-modal');
+const projectNameInput = document.getElementById('project-name-input');
+const projectColorInput = document.getElementById('project-color-input');
+const btnSaveProject = document.getElementById('btn-save-project');
+const btnCancelProject = document.getElementById('btn-cancel-project');
 
-// MOTOR DE ÁUDIO SINTETIZADO (WEB AUDIO API)
-function playSynthesizedSound(type) {
-    if (type === 'none') return;
+// Elementos do Pomodoro
+const timerDisplay = document.getElementById('timer');
+const startBtn = document.getElementById('start-btn');
+const pauseBtn = document.getElementById('pause-btn');
+const resetBtn = document.getElementById('reset-btn');
+const soundFocusSelect = document.getElementById('sound-focus');
+const soundBreakSelect = document.getElementById('sound-break');
 
-    // Cria o contexto de áudio do navegador
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
+// --- TAPE SINTETIZADOR DE ÁUDIO (Web Audio API) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(type) {
+    if (type === 'silent') return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
 
     if (type === 'beep') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, ctx.currentTime); // Frequência média
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); // Esmaece rápido
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-    } 
-    else if (type === 'alarme') {
-        // Bi-bi rápido usando encadeamento de tempo
-        [0, 0.2].forEach(delay => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'square'; // Onda quadrada (som mais digital)
-            osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
-            gain.gain.setValueAtTime(0.05, ctx.currentTime + delay);
-            gain.gain.setValueAtTime(0, ctx.currentTime + delay + 0.1);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(ctx.currentTime + delay);
-            osc.stop(ctx.currentTime + delay + 0.12);
-        });
-    } 
-    else if (type === 'gongo') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle'; // Onda suave e aveludada
-        osc.frequency.setValueAtTime(220, ctx.currentTime); // Tom grave e relaxante
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5); // Eco longo
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 1.5);
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'double-alarm') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1046.50, now); // C6
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.setValueAtTime(0.01, now + 0.1);
+        gain.gain.setValueAtTime(0.2, now + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+    } else if (type === 'zen') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+        osc.start(now);
+        osc.stop(now + 1.5);
     }
 }
 
-// Ouvir o som imediatamente ao mudar o seletor na tela
-function testSound(type) {
-    playSynthesizedSound(type);
-}
+// Configurações de som e escuta de testes
+soundFocusSelect.value = state.audioSettings?.focus || 'double-alarm';
+soundBreakSelect.value = state.audioSettings?.break || 'beep';
 
-function saveSoundPreferences() {
-    const prefs = {
-        focus: document.getElementById('focus-sound-select').value,
-        break: document.getElementById('break-sound-select').value
-    };
-    localStorage.setItem(SOUND_PREF_KEY, JSON.stringify(prefs));
-}
+soundFocusSelect.onchange = (e) => {
+    state.audioSettings.focus = e.target.value;
+    playSound(e.target.value);
+    saveData();
+};
 
-function loadSoundPreferences() {
-    const saved = localStorage.getItem(SOUND_PREF_KEY);
-    if (saved) {
-        const prefs = JSON.parse(saved);
-        document.getElementById('focus-sound-select').value = prefs.focus || 'beep';
-        document.getElementById('break-sound-select').value = prefs.break || 'alarme';
-    }
-}
+soundBreakSelect.onchange = (e) => {
+    state.audioSettings.break = e.target.value;
+    playSound(e.target.value);
+    saveData();
+};
+
+// --- LÓGICA DO POMODORO (RESILIENTE A ABA EM SEGUNDO PLANO) ---
+let timerInterval = null;
+let timeLeft = 25 * 60;
+let isFocusMode = true;
+let targetTime = null;
 
 function updateTimerDisplay() {
-    const m = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
-    const s = String(timeRemaining % 60).padStart(2, '0');
-    document.getElementById('timer-display').textContent = `${m}:${s}`;
-    document.getElementById('cycle-count').textContent = pomodoroCycles;
-    
-    const statusEl = document.getElementById('current-phase');
-    document.body.classList.remove('focus-mode', 'break-mode');
-    
-    if (currentPhase === 'pomodoro') {
-        statusEl.textContent = 'Foco (25 min)';
-        document.body.classList.add('focus-mode');
-    } else {
-        statusEl.textContent = currentPhase === 'short-break' ? 'Descanso Curto' : 'Descanso Longo';
-        document.body.classList.add('break-mode');
-    }
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    timerDisplay.innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function startTimer() {
-    if (!isPaused) return;
-    isPaused = false;
-    endTime = Date.now() + (timeRemaining * 1000);
-    document.getElementById('start-btn').disabled = true;
-    document.getElementById('pause-btn').disabled = false;
+startBtn.onclick = () => {
+    if (timerInterval) return;
+
+    targetTime = Date.now() + timeLeft * 1000;
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
 
     timerInterval = setInterval(() => {
         const now = Date.now();
-        const difference = Math.round((endTime - now) / 1000);
+        timeLeft = Math.max(0, Math.round((targetTime - now) / 1000));
+        updateTimerDisplay();
 
-        if (difference <= 0) {
-            timeRemaining = 0;
-            updateTimerDisplay();
+        if (timeLeft <= 0) {
             clearInterval(timerInterval);
-            handlePhaseEnd(); 
-        } else {
-            timeRemaining = difference;
+            timerInterval = null;
+            
+            // Toca som configurado
+            playSound(isFocusMode ? soundFocusSelect.value : soundBreakSelect.value);
+
+            // Alterna ciclo
+            isFocusMode = !isFocusMode;
+            timeLeft = isFocusMode ? 25 * 60 : 5 * 60;
             updateTimerDisplay();
+
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            alert(isFocusMode ? "Pausa encerrada! Hora de focar." : "Ciclo de foco finalizado! Hora de descansar.");
         }
-    }, 200);
-}
+    }, 250);
+};
 
-function pauseTimer() {
-    isPaused = true;
+pauseBtn.onclick = () => {
     clearInterval(timerInterval);
-    document.getElementById('start-btn').disabled = false;
-    document.getElementById('pause-btn').disabled = true;
-}
+    timerInterval = null;
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+};
 
-function resetTimer() {
-    pauseTimer();
-    pomodoroCycles = 0;
-    currentPhase = 'pomodoro';
-    timeRemaining = POMODORO_TIME;
+resetBtn.onclick = () => {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    isFocusMode = true;
+    timeLeft = 25 * 60;
     updateTimerDisplay();
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+};
+
+// --- PERSISTÊNCIA & RENDERIZAÇÃO ---
+function saveData() {
+    localStorage.setItem('mytasks_data', JSON.stringify(state));
+    render();
 }
 
-function handlePhaseEnd() {
-    isPaused = true;
-    document.getElementById('start-btn').disabled = false;
-    document.getElementById('pause-btn').disabled = true;
+function render() {
+    renderSidebar();
+    renderTasks();
+}
 
-    const focusSound = document.getElementById('focus-sound-select').value;
-    const breakSound = document.getElementById('break-sound-select').value;
+// --- SIDEBAR (PROJETOS & SUBPROJETOS) ---
+function renderSidebar() {
+    projectsListEl.innerHTML = '';
 
-    if (currentPhase === 'pomodoro') {
-        pomodoroCycles++;
-        currentPhase = (pomodoroCycles % 4 === 0) ? 'long-break' : 'short-break';
-        timeRemaining = (currentPhase === 'long-break') ? LONG_BREAK_TIME : SHORT_BREAK_TIME;
-        
-        playSynthesizedSound(focusSound); // Som escolhido para o fim do foco
-        alert("Ciclo de Foco finalizado! Hora de descansar. Clique em 'Iniciar' para começar a pausa.");
+    state.projects.forEach(proj => {
+        const projDiv = document.createElement('div');
+        projDiv.className = 'project-group';
+
+        const isProjActive = state.activeContext.type === 'project' && state.activeContext.projectId === proj.id && !state.activeContext.subprojectId;
+
+        projDiv.innerHTML = `
+            <div class="nav-item ${isProjActive ? 'active' : ''}" onclick="setContext('project', '${proj.id}')">
+                <span class="project-bullet" style="background-color: ${proj.color}"></span>
+                <span style="flex: 1;">${proj.name}</span>
+                <button class="btn-icon" style="font-size:1rem;" onclick="event.stopPropagation(); promptAddSubproject('${proj.id}')" title="Novo Subprojeto">+</button>
+            </div>
+            <div class="subprojects-list">
+                ${proj.subprojects.map(sub => {
+                    const isSubActive = state.activeContext.type === 'project' && state.activeContext.subprojectId === sub.id;
+                    return `
+                        <div class="nav-item subproject-item ${isSubActive ? 'active' : ''}" onclick="setContext('project', '${proj.id}', '${sub.id}')">
+                            <span>└ ${sub.name}</span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        projectsListEl.appendChild(projDiv);
+    });
+}
+
+function setContext(type, projectId = null, subprojectId = null) {
+    state.activeContext = { type, projectId, subprojectId };
+    
+    if (type === 'inbox') {
+        currentContextTitle.innerText = "📥 Caixa de Entrada";
     } else {
-        currentPhase = 'pomodoro';
-        timeRemaining = POMODORO_TIME;
-        
-        playSynthesizedSound(breakSound); // Som escolhido para o fim da pausa
-        alert("Pausa finalizada! Pronto para focar novamente? Clique em 'Iniciar'.");
+        const proj = state.projects.find(p => p.id === projectId);
+        if (subprojectId) {
+            const sub = proj.subprojects.find(s => s.id === subprojectId);
+            currentContextTitle.innerText = `${proj.name} > ${sub.name}`;
+        } else {
+            currentContextTitle.innerText = proj ? proj.name : "Projeto";
+        }
     }
     
-    updateTimerDisplay();
+    document.querySelector('[data-type="inbox"]').classList.toggle('active', type === 'inbox');
+    saveData();
 }
 
-// =======================================================
-// === CORE STORAGE & TAREFAS ===
-// =======================================================
+// --- MODAL & GERENCIAMENTO DE PROJETOS ---
+btnNewProject.onclick = () => projectModal.classList.remove('hidden');
+btnCancelProject.onclick = () => projectModal.classList.add('hidden');
 
-function getTasksFromStorage() {
-    const tasks = JSON.parse(localStorage.getItem('todoTasks') || '[]');
-    return tasks.map(t => ({
-        ...t,
-        subtasks: t.subtasks || [],
-        subtaskExpanded: !!t.subtaskExpanded
-    }));
+btnSaveProject.onclick = () => {
+    const name = projectNameInput.value.trim();
+    if (!name) return;
+
+    state.projects.push({
+        id: 'proj_' + Date.now(),
+        name: name,
+        color: projectColorInput.value,
+        subprojects: []
+    });
+
+    projectNameInput.value = '';
+    projectModal.classList.add('hidden');
+    saveData();
+};
+
+function promptAddSubproject(projectId) {
+    const subName = prompt("Nome do Subprojeto:");
+    if (!subName) return;
+
+    const proj = state.projects.find(p => p.id === projectId);
+    if (proj) {
+        proj.subprojects.push({
+            id: 'sub_' + Date.now(),
+            name: subName.trim()
+        });
+        saveData();
+    }
 }
-function saveTasksToStorage(tasks) { localStorage.setItem('todoTasks', JSON.stringify(tasks)); }
 
-// DRAG AND DROP
-let dragTargetIndex = null;
-function handleDragStart(e, index) { dragTargetIndex = index; e.currentTarget.classList.add('dragging'); }
-function handleDragOver(e) { e.preventDefault(); }
-function handleDrop(e, toIndex) {
+// --- GERENCIAMENTO DE TAREFAS & ALERTA DE 15 DIAS ---
+taskForm.onsubmit = (e) => {
     e.preventDefault();
-    if (dragTargetIndex === null || dragTargetIndex === toIndex) return;
-    const tasks = getTasksFromStorage();
-    const draggedItem = tasks.splice(dragTargetIndex, 1)[0];
-    tasks.splice(toIndex, 0, draggedItem);
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-function handleDragEnd(e) { e.currentTarget.classList.remove('dragging'); }
+    const text = taskInput.value.trim();
+    if (!text) return;
 
-function addTask() {
-    const input = document.getElementById('task-input');
-    if (!input.value.trim()) return;
-    const tasks = getTasksFromStorage();
-    tasks.unshift({
-        id: Date.now(),
-        text: input.value.trim(),
-        priority: document.getElementById('priority-select').value,
-        dueDate: document.getElementById('due-date-input').value,
-        dateAdded: new Date().toISOString(),
+    const now = Date.now();
+    state.tasks.unshift({
+        id: 'task_' + now,
+        projectId: state.activeContext.type === 'project' ? state.activeContext.projectId : null,
+        subprojectId: state.activeContext.type === 'project' ? state.activeContext.subprojectId : null,
+        text: text,
+        priority: taskPriority.value,
         completed: false,
         subtasks: [],
-        subtaskExpanded: false
+        createdAt: now,
+        updatedAt: now // Data base do alerta de inatividade
     });
-    saveTasksToStorage(tasks);
-    input.value = '';
-    renderTasks();
+
+    taskInput.value = '';
+    saveData();
+};
+
+function renderTasks() {
+    tasksListEl.innerHTML = '';
+
+    // Filtragem por Contexto
+    const filteredTasks = state.tasks.filter(t => {
+        if (state.activeContext.type === 'inbox') {
+            return !t.projectId;
+        }
+        if (state.activeContext.subprojectId) {
+            return t.subprojectId === state.activeContext.subprojectId;
+        }
+        return t.projectId === state.activeContext.projectId;
+    });
+
+    const now = Date.now();
+    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+    filteredTasks.forEach(task => {
+        const li = document.createElement('li');
+        li.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
+        
+        // Borda com a cor do Projeto
+        if (task.projectId) {
+            const proj = state.projects.find(p => p.id === task.projectId);
+            if (proj) li.style.borderLeft = `5px solid ${proj.color}`;
+        }
+
+        // Cálculo de Inatividade para o Alerta (15+ dias sem edições)
+        const daysInactive = Math.floor((now - task.updatedAt) / (1000 * 60 * 60 * 24));
+        const isStale = !task.completed && ((now - task.updatedAt) >= FIFTEEN_DAYS_MS);
+
+        li.innerHTML = `
+            <div class="task-content">
+                <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
+                <span class="task-text" ondblclick="editTask('${task.id}')">${task.text}</span>
+                ${isStale ? `<span class="stale-badge" title="Sem edições há ${daysInactive} dias">⚠️ ${daysInactive} dias estagnada</span>` : ''}
+            </div>
+            <div class="task-actions">
+                <button onclick="deleteTask('${task.id}')">X</button>
+            </div>
+        `;
+
+        tasksListEl.appendChild(li);
+    });
 }
 
-function updateTaskPriority(id, newPriority) {
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === id);
-    if (task) {
-        task.priority = newPriority;
-        saveTasksToStorage(tasks);
-        renderTasks();
-    }
-}
-
-function updateTaskText(id, newText) {
-    if (!newText.trim()) return renderTasks();
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === id);
-    if (task) {
-        task.text = newText.trim();
-        saveTasksToStorage(tasks);
-    }
-    renderTasks();
-}
-
-function toggleComplete(id) {
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === id);
+function toggleTask(id) {
+    const task = state.tasks.find(t => t.id === id);
     if (task) {
         task.completed = !task.completed;
-        if (task.completed) addToHistory(task);
+        task.updatedAt = Date.now();
+        saveData();
     }
-    saveTasksToStorage(tasks);
-    renderTasks();
-    displayHistory();
+}
+
+function editTask(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+
+    const newText = prompt("Editar tarefa:", task.text);
+    if (newText !== null && newText.trim() !== "") {
+        task.text = newText.trim();
+        task.updatedAt = Date.now(); // Reseta o alerta de 15 dias ao editar
+        saveData();
+    }
 }
 
 function deleteTask(id) {
-    if (!confirm("Excluir tarefa?")) return;
-    const tasks = getTasksFromStorage().filter(t => t.id !== id);
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-
-// =======================================================
-// === RENDERIZAÇÃO ===
-// =======================================================
-
-function renderTasks() {
-    const list = document.getElementById('task-list');
-    const tasks = getTasksFromStorage();
-    let displayTasks = tasks;
-    if (currentFilter !== 'all') {
-        displayTasks = tasks.filter(t => t.completed || t.priority === currentFilter);
-    }
-
-    list.innerHTML = '';
-    displayTasks.forEach((t, index) => {
-        const li = document.createElement('li');
-        li.className = `task-item task-${t.priority} ${t.completed ? 'task-completed' : ''}`;
-        li.draggable = true;
-        li.ondragstart = (e) => handleDragStart(e, index);
-        li.ondragover = (e) => handleDragOver(e);
-        li.ondrop = (e) => handleDrop(e, index);
-        li.ondragend = (e) => handleDragEnd(e);
-
-        const isOld = !t.completed && (new Date() - new Date(t.dateAdded) > FIFTEEN_DAYS_MS);
-        
-        li.innerHTML = `
-            <div class="task-main-row">
-                <div class="task-info">
-                    <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleComplete(${t.id})">
-                    <span class="task-text" id="text-${t.id}" ondblclick="enableTaskEdit(${t.id}, '${t.text.replace(/'/g, "\\'")}')">
-                        ${t.text} ${isOld ? '⚠️' : ''}
-                    </span>
-                    ${!t.completed ? `
-                        <select class="task-priority-inline" onchange="updateTaskPriority(${t.id}, this.value)">
-                            <option value="alta" ${t.priority === 'alta' ? 'selected' : ''}>Alta</option>
-                            <option value="media" ${t.priority === 'media' ? 'selected' : ''}>Média</option>
-                            <option value="baixa" ${t.priority === 'baixa' ? 'selected' : ''}>Baixa</option>
-                        </select>
-                    ` : ''}
-                </div>
-                <div style="display:flex; align-items:center; gap:10px">
-                    <button class="subtask-expander ${t.subtaskExpanded ? 'expanded' : ''}" onclick="toggleExpand(${t.id})">►</button>
-                    <button class="delete-btn" onclick="deleteTask(${t.id})">×</button>
-                </div>
-            </div>
-            ${t.dueDate ? `<div style="font-size:0.75em; margin-top:5px; font-weight:bold">📅 Prazo: ${new Date(t.dueDate + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : ''}
-            <div class="subtask-area" style="display: ${t.subtaskExpanded ? 'block' : 'none'}">
-                <div class="subtask-list">
-                    ${t.subtasks.map(s => `
-                        <div class="subtask-item ${s.completed ? 'subtask-completed' : ''}">
-                            <input type="checkbox" ${s.completed ? 'checked' : ''} onclick="toggleSub(${t.id}, ${s.id})">
-                            <span>${s.text}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                ${!t.completed ? `
-                    <div style="margin-top:8px">
-                        <input type="text" placeholder="Passo..." class="new-subtask-input" id="sub-in-${t.id}">
-                        <button onclick="addSubtask(${t.id})" style="color:#61dafb; background:none; border:none; cursor:pointer; font-weight:bold">+</button>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-        list.appendChild(li);
-    });
-    updateCounters(tasks);
-}
-
-function enableTaskEdit(id, currentText) {
-    const span = document.getElementById(`text-${id}`);
-    if (!span) return;
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'edit-task-input';
-    input.value = currentText;
-
-    span.closest('.task-item').draggable = false;
-
-    input.onblur = () => updateTaskText(id, input.value);
-    input.onkeydown = (e) => {
-        if (e.key === 'Enter') input.blur();
-        if (e.key === 'Escape') renderTasks();
-    };
-
-    span.innerHTML = '';
-    span.appendChild(input);
-    input.focus();
-}
-
-function toggleExpand(id) {
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === id);
-    task.subtaskExpanded = !task.subtaskExpanded;
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-
-function addSubtask(taskId) {
-    const input = document.getElementById(`sub-in-${taskId}`);
-    if (!input.value.trim()) return;
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === taskId);
-    task.subtasks.push({ id: Date.now(), text: input.value.trim(), completed: false });
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-
-function toggleSub(taskId, subId) {
-    const tasks = getTasksFromStorage();
-    const task = tasks.find(t => t.id === taskId);
-    const sub = task.subtasks.find(s => s.id === subId);
-    sub.completed = !sub.completed;
-    saveTasksToStorage(tasks);
-    renderTasks();
-}
-
-// =======================================================
-// === HISTÓRICO & AUXILIARES ===
-// =======================================================
-
-function updateCounters(tasks) {
-    document.getElementById('count-alta').textContent = `Alta: ${tasks.filter(t => !t.completed && t.priority === 'alta').length}`;
-    document.getElementById('count-media').textContent = `Média: ${tasks.filter(t => !t.completed && t.priority === 'media').length}`;
-    document.getElementById('count-baixa').textContent = `Baixa: ${tasks.filter(t => !t.completed && t.priority === 'baixa').length}`;
-    const comp = tasks.filter(t => t.completed).length;
-    document.getElementById('clear-completed-btn').disabled = comp === 0;
-    document.getElementById('clear-completed-btn').textContent = `Limpar Concluídas (${comp})`;
-}
-
-function addToHistory(task) {
-    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-    const key = new Date().toISOString().split('T')[0];
-    if (!h[key]) h[key] = [];
-    h[key].push({ text: task.text, time: new Date().toLocaleTimeString('pt-BR') });
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
-}
-
-function displayHistory() {
-    const container = document.getElementById('history-container');
-    const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-    const now = Date.now();
-    
-    Object.keys(h).forEach(k => {
-        if (now - new Date(k + 'T00:00:00').getTime() > SEVEN_DAYS_MS) delete h[k];
-    });
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
-
-    const keys = Object.keys(h).sort().reverse();
-    container.innerHTML = '<h3>Histórico (Últimos 7 dias)</h3>';
-    keys.forEach(k => {
-        const label = new Date(k + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric' });
-        container.innerHTML += `
-            <details>
-                <summary><strong>${label} (${h[k].length})</strong></summary>
-                <div style="padding:5px 15px">
-                    ${h[k].map(e => `<div class="history-item-line">[${e.time}] ${e.text}</div>`).join('')}
-                </div>
-            </details>
-        `;
-    });
-}
-
-function setFilter(f) { currentFilter = f; renderTasks(); }
-function clearCompletedTasks() {
-    if (confirm("Remover concluídas?")) {
-        saveTasksToStorage(getTasksFromStorage().filter(t => !t.completed));
-        renderTasks();
+    if (confirm("Deseja excluir esta tarefa?")) {
+        state.tasks = state.tasks.filter(t => t.id !== id);
+        saveData();
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadSoundPreferences(); // Carrega o áudio preferido do usuário
-    updateTimerDisplay();
-    renderTasks();
-    displayHistory();
-    
-    document.getElementById('start-btn').onclick = startTimer;
-    document.getElementById('pause-btn').onclick = pauseTimer;
-    document.getElementById('reset-btn').onclick = resetTimer;
-});
+// Evento da Caixa de Entrada
+document.querySelector('[data-type="inbox"]').onclick = () => setContext('inbox');
+
+// Inicialização Geral
+render();
