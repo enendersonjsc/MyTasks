@@ -1,36 +1,55 @@
-// --- ESTRUTURA DE DADOS E ESTADO INICIAL ---
+// --- ESTADO INICIAL & PERSISTÊNCIA ---
 let state = JSON.parse(localStorage.getItem('mytasks_data')) || {
-    projects: [],
-    tasks: [],
-    activeContext: { type: 'inbox', projectId: null, subprojectId: null },
+    projects: [], // [{ id, name, color, parentId }]
+    tasks: [],    // [{ id, projectId, text, priority, completed, createdAt, updatedAt, completedAt }]
+    activeContext: { type: 'inbox', projectId: null },
     audioSettings: { focus: 'double-alarm', break: 'beep' }
 };
 
+let targetParentProjectId = null;
+const MAX_DEPTH = 3; // Limite de 3 níveis para manter UX limpa
+
+// LIMPEZA AUTOMÁTICA EM SEGUNDO PLANO (REMOVE CONCLUÍDAS COM MAIS DE 7 DIAS)
+function cleanupOldCompletedTasks() {
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    
+    state.tasks = state.tasks.filter(t => {
+        if (t.completed && t.completedAt) {
+            return (now - t.completedAt) < SEVEN_DAYS_MS;
+        }
+        return true;
+    });
+}
+
 // --- ELEMENTOS DO DOM ---
-const projectsListEl = document.getElementById('projects-list');
+const projectsTreeEl = document.getElementById('projects-tree');
 const tasksListEl = document.getElementById('tasks-list');
 const currentContextTitle = document.getElementById('current-context-title');
 const taskForm = document.getElementById('task-form');
 const taskInput = document.getElementById('task-input');
 const taskPriority = document.getElementById('task-priority');
 
-// Elementos do Modal de Projetos
+// Modal
 const btnNewProject = document.getElementById('btn-new-project');
 const projectModal = document.getElementById('project-modal');
+const modalTitle = document.getElementById('modal-title');
 const projectNameInput = document.getElementById('project-name-input');
 const projectColorInput = document.getElementById('project-color-input');
 const btnSaveProject = document.getElementById('btn-save-project');
 const btnCancelProject = document.getElementById('btn-cancel-project');
 
-// Elementos do Pomodoro
+// Pomodoro
 const timerDisplay = document.getElementById('timer');
 const startBtn = document.getElementById('start-btn');
 const pauseBtn = document.getElementById('pause-btn');
 const resetBtn = document.getElementById('reset-btn');
 const soundFocusSelect = document.getElementById('sound-focus');
+soundFocusSelect.value = state.audioSettings?.focus || 'double-alarm';
 const soundBreakSelect = document.getElementById('sound-break');
+soundBreakSelect.value = state.audioSettings?.break || 'beep';
 
-// --- TAPE SINTETIZADOR DE ÁUDIO (Web Audio API) ---
+// --- SINTETIZADOR DE ÁUDIO (Web Audio API) ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
@@ -41,7 +60,6 @@ function playSound(type) {
     const gain = audioCtx.createGain();
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-
     const now = audioCtx.currentTime;
 
     if (type === 'beep') {
@@ -53,7 +71,7 @@ function playSound(type) {
         osc.stop(now + 0.3);
     } else if (type === 'double-alarm') {
         osc.type = 'square';
-        osc.frequency.setValueAtTime(1046.50, now); // C6
+        osc.frequency.setValueAtTime(1046.50, now);
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.setValueAtTime(0.01, now + 0.1);
         gain.gain.setValueAtTime(0.2, now + 0.2);
@@ -70,10 +88,6 @@ function playSound(type) {
     }
 }
 
-// Configurações de som e escuta de testes
-soundFocusSelect.value = state.audioSettings?.focus || 'double-alarm';
-soundBreakSelect.value = state.audioSettings?.break || 'beep';
-
 soundFocusSelect.onchange = (e) => {
     state.audioSettings.focus = e.target.value;
     playSound(e.target.value);
@@ -86,7 +100,7 @@ soundBreakSelect.onchange = (e) => {
     saveData();
 };
 
-// --- LÓGICA DO POMODORO (RESILIENTE A ABA EM SEGUNDO PLANO) ---
+// --- POMODORO TIMER ---
 let timerInterval = null;
 let timeLeft = 25 * 60;
 let isFocusMode = true;
@@ -100,7 +114,6 @@ function updateTimerDisplay() {
 
 startBtn.onclick = () => {
     if (timerInterval) return;
-
     targetTime = Date.now() + timeLeft * 1000;
     startBtn.disabled = true;
     pauseBtn.disabled = false;
@@ -113,15 +126,10 @@ startBtn.onclick = () => {
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
             timerInterval = null;
-            
-            // Toca som configurado
             playSound(isFocusMode ? soundFocusSelect.value : soundBreakSelect.value);
-
-            // Alterna ciclo
             isFocusMode = !isFocusMode;
             timeLeft = isFocusMode ? 25 * 60 : 5 * 60;
             updateTimerDisplay();
-
             startBtn.disabled = false;
             pauseBtn.disabled = true;
             alert(isFocusMode ? "Pausa encerrada! Hora de focar." : "Ciclo de foco finalizado! Hora de descansar.");
@@ -146,69 +154,97 @@ resetBtn.onclick = () => {
     pauseBtn.disabled = true;
 };
 
-// --- PERSISTÊNCIA & RENDERIZAÇÃO ---
+// --- SALVAR E RENDERIZAR ---
 function saveData() {
     localStorage.setItem('mytasks_data', JSON.stringify(state));
     render();
 }
 
 function render() {
+    cleanupOldCompletedTasks();
     renderSidebar();
     renderTasks();
 }
 
-// --- SIDEBAR (PROJETOS & SUBPROJETOS) ---
+// --- SIDEBAR (ÁRVORE DE PROJETOS DE ATÉ 3 NÍVEIS) ---
 function renderSidebar() {
-    projectsListEl.innerHTML = '';
+    projectsTreeEl.innerHTML = '';
+    renderProjectTree(null, projectsTreeEl, 1);
+}
 
-    state.projects.forEach(proj => {
-        const projDiv = document.createElement('div');
-        projDiv.className = 'project-group';
+function renderProjectTree(parentId, container, depth) {
+    const children = state.projects.filter(p => p.parentId === parentId);
 
-        const isProjActive = state.activeContext.type === 'project' && state.activeContext.projectId === proj.id && !state.activeContext.subprojectId;
+    children.forEach(proj => {
+        const itemContainer = document.createElement('div');
+        
+        const isCurrentActive = state.activeContext.type === 'project' && state.activeContext.projectId === proj.id;
+        const indentPadding = (depth - 1) * 12;
 
-        projDiv.innerHTML = `
-            <div class="nav-item ${isProjActive ? 'active' : ''}" onclick="setContext('project', '${proj.id}')">
-                <span class="project-bullet" style="background-color: ${proj.color}"></span>
-                <span style="flex: 1;">${proj.name}</span>
-                <button class="btn-icon" style="font-size:1rem;" onclick="event.stopPropagation(); promptAddSubproject('${proj.id}')" title="Novo Subprojeto">+</button>
-            </div>
-            <div class="subprojects-list">
-                ${proj.subprojects.map(sub => {
-                    const isSubActive = state.activeContext.type === 'project' && state.activeContext.subprojectId === sub.id;
-                    return `
-                        <div class="nav-item subproject-item ${isSubActive ? 'active' : ''}" onclick="setContext('project', '${proj.id}', '${sub.id}')">
-                            <span>└ ${sub.name}</span>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
+        const row = document.createElement('div');
+        row.className = `project-row ${isCurrentActive ? 'active' : ''}`;
+        row.style.paddingLeft = `${8 + indentPadding}px`;
+        row.onclick = () => setContext('project', proj.id);
+
+        const canHaveSubprojects = depth < MAX_DEPTH;
+
+        row.innerHTML = `
+            <span class="project-bullet" style="background-color: ${proj.color}"></span>
+            <span class="project-name">${proj.name}</span>
+            ${canHaveSubprojects ? `<button class="btn-add-sub" onclick="event.stopPropagation(); openNewProjectModal('${proj.id}')" title="Adicionar Subprojeto">+</button>` : ''}
         `;
-        projectsListEl.appendChild(projDiv);
+
+        itemContainer.appendChild(row);
+        container.appendChild(itemContainer);
+
+        renderProjectTree(proj.id, itemContainer, depth + 1);
     });
 }
 
-function setContext(type, projectId = null, subprojectId = null) {
-    state.activeContext = { type, projectId, subprojectId };
+function getBreadcrumbPath(projectId) {
+    const path = [];
+    let curr = state.projects.find(p => p.id === projectId);
+    while (curr) {
+        path.unshift(curr.name);
+        curr = state.projects.find(p => p.id === curr.parentId);
+    }
+    return path.join(' > ');
+}
+
+function setContext(type, projectId = null) {
+    state.activeContext = { type, projectId };
     
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
     if (type === 'inbox') {
         currentContextTitle.innerText = "📥 Caixa de Entrada";
+        document.querySelector('[data-type="inbox"]').classList.add('active');
     } else {
-        const proj = state.projects.find(p => p.id === projectId);
-        if (subprojectId) {
-            const sub = proj.subprojects.find(s => s.id === subprojectId);
-            currentContextTitle.innerText = `${proj.name} > ${sub.name}`;
-        } else {
-            currentContextTitle.innerText = proj ? proj.name : "Projeto";
-        }
+        currentContextTitle.innerText = getBreadcrumbPath(projectId) || "Projeto";
     }
     
-    document.querySelector('[data-type="inbox"]').classList.toggle('active', type === 'inbox');
     saveData();
 }
 
-// --- MODAL & GERENCIAMENTO DE PROJETOS ---
-btnNewProject.onclick = () => projectModal.classList.remove('hidden');
+// --- MODAL DE PROJETOS ---
+btnNewProject.onclick = () => openNewProjectModal(null);
+
+function openNewProjectModal(parentId = null) {
+    targetParentProjectId = parentId;
+    projectNameInput.value = '';
+    
+    if (parentId) {
+        const parentProj = state.projects.find(p => p.id === parentId);
+        modalTitle.innerText = `Subprojeto de "${parentProj.name}"`;
+        projectColorInput.value = parentProj ? parentProj.color : '#3498db';
+    } else {
+        modalTitle.innerText = "Novo Projeto Principal";
+        projectColorInput.value = '#3498db';
+    }
+    
+    projectModal.classList.remove('hidden');
+}
+
 btnCancelProject.onclick = () => projectModal.classList.add('hidden');
 
 btnSaveProject.onclick = () => {
@@ -219,29 +255,24 @@ btnSaveProject.onclick = () => {
         id: 'proj_' + Date.now(),
         name: name,
         color: projectColorInput.value,
-        subprojects: []
+        parentId: targetParentProjectId
     });
 
-    projectNameInput.value = '';
     projectModal.classList.add('hidden');
     saveData();
 };
 
-function promptAddSubproject(projectId) {
-    const subName = prompt("Nome do Subprojeto:");
-    if (!subName) return;
-
-    const proj = state.projects.find(p => p.id === projectId);
-    if (proj) {
-        proj.subprojects.push({
-            id: 'sub_' + Date.now(),
-            name: subName.trim()
-        });
-        saveData();
-    }
+// --- OBTÊM SUBPROJETOS (ROLL-UP) ---
+function getAllSubProjectIds(projectId) {
+    let ids = [projectId];
+    const children = state.projects.filter(p => p.parentId === projectId);
+    children.forEach(child => {
+        ids = ids.concat(getAllSubProjectIds(child.id));
+    });
+    return ids;
 }
 
-// --- GERENCIAMENTO DE TAREFAS & ALERTA DE 15 DIAS ---
+// --- GERENCIAMENTO DE TAREFAS ---
 taskForm.onsubmit = (e) => {
     e.preventDefault();
     const text = taskInput.value.trim();
@@ -251,13 +282,12 @@ taskForm.onsubmit = (e) => {
     state.tasks.unshift({
         id: 'task_' + now,
         projectId: state.activeContext.type === 'project' ? state.activeContext.projectId : null,
-        subprojectId: state.activeContext.type === 'project' ? state.activeContext.subprojectId : null,
         text: text,
         priority: taskPriority.value,
         completed: false,
-        subtasks: [],
         createdAt: now,
-        updatedAt: now // Data base do alerta de inatividade
+        updatedAt: now,
+        completedAt: null
     });
 
     taskInput.value = '';
@@ -266,44 +296,53 @@ taskForm.onsubmit = (e) => {
 
 function renderTasks() {
     tasksListEl.innerHTML = '';
-
-    // Filtragem por Contexto
-    const filteredTasks = state.tasks.filter(t => {
-        if (state.activeContext.type === 'inbox') {
-            return !t.projectId;
-        }
-        if (state.activeContext.subprojectId) {
-            return t.subprojectId === state.activeContext.subprojectId;
-        }
-        return t.projectId === state.activeContext.projectId;
-    });
-
     const now = Date.now();
     const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+    let filteredTasks = [];
+
+    // 1. Filtragem por Contexto
+    if (state.activeContext.type === 'inbox') {
+        filteredTasks = state.tasks.filter(t => !t.projectId);
+    } else if (state.activeContext.type === 'project') {
+        const targetProjectIds = getAllSubProjectIds(state.activeContext.projectId);
+        filteredTasks = state.tasks.filter(t => targetProjectIds.includes(t.projectId));
+    }
+
+    if (filteredTasks.length === 0) {
+        tasksListEl.innerHTML = `<li style="color: #777; font-style: italic; padding: 10px;">Nenhuma tarefa encontrada neste contexto.</li>`;
+        return;
+    }
+
+    // 2. Ordenação: Tarefas ativas primeiro, concluídas (nos últimos 7 dias) por último
+    filteredTasks.sort((a, b) => a.completed - b.completed);
 
     filteredTasks.forEach(task => {
         const li = document.createElement('li');
         li.className = `task-item priority-${task.priority} ${task.completed ? 'completed' : ''}`;
         
-        // Borda com a cor do Projeto
         if (task.projectId) {
             const proj = state.projects.find(p => p.id === task.projectId);
             if (proj) li.style.borderLeft = `5px solid ${proj.color}`;
         }
 
-        // Cálculo de Inatividade para o Alerta (15+ dias sem edições)
         const daysInactive = Math.floor((now - task.updatedAt) / (1000 * 60 * 60 * 24));
         const isStale = !task.completed && ((now - task.updatedAt) >= FIFTEEN_DAYS_MS);
+
+        let completedBadge = '';
+        if (task.completed && task.completedAt) {
+            const dateObj = new Date(task.completedAt);
+            completedBadge = `<span class="completed-date">✓ Concluída em ${dateObj.toLocaleDateString()}</span>`;
+        }
 
         li.innerHTML = `
             <div class="task-content">
                 <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
                 <span class="task-text" ondblclick="editTask('${task.id}')">${task.text}</span>
-                ${isStale ? `<span class="stale-badge" title="Sem edições há ${daysInactive} dias">⚠️ ${daysInactive} dias estagnada</span>` : ''}
+                ${isStale ? `<span class="stale-badge" title="Sem edições há ${daysInactive} dias">⚠️ ${daysInactive}d estagnada</span>` : ''}
             </div>
-            <div class="task-actions">
-                <button onclick="deleteTask('${task.id}')">X</button>
-            </div>
+            ${completedBadge}
+            <button class="btn-delete" onclick="deleteTask('${task.id}')" title="Excluir permanentemente">✕</button>
         `;
 
         tasksListEl.appendChild(li);
@@ -315,6 +354,7 @@ function toggleTask(id) {
     if (task) {
         task.completed = !task.completed;
         task.updatedAt = Date.now();
+        task.completedAt = task.completed ? Date.now() : null;
         saveData();
     }
 }
@@ -326,20 +366,20 @@ function editTask(id) {
     const newText = prompt("Editar tarefa:", task.text);
     if (newText !== null && newText.trim() !== "") {
         task.text = newText.trim();
-        task.updatedAt = Date.now(); // Reseta o alerta de 15 dias ao editar
+        task.updatedAt = Date.now();
         saveData();
     }
 }
 
 function deleteTask(id) {
-    if (confirm("Deseja excluir esta tarefa?")) {
+    if (confirm("Deseja excluir permanentemente esta tarefa?")) {
         state.tasks = state.tasks.filter(t => t.id !== id);
         saveData();
     }
 }
 
-// Evento da Caixa de Entrada
+// --- NAVEGAÇÃO ---
 document.querySelector('[data-type="inbox"]').onclick = () => setContext('inbox');
 
-// Inicialização Geral
+// Renderização Inicial
 render();
