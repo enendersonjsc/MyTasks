@@ -121,23 +121,32 @@ body {
     text-overflow: ellipsis;
 }
 
-.btn-add-sub {
-    background: none;
-    border: none;
-    color: #777;
-    cursor: pointer;
-    font-size: 0.9rem;
-    padding: 0 4px;
+.project-actions {
+    display: flex;
+    gap: 4px;
     opacity: 0;
     transition: opacity 0.2s;
 }
 
-.project-row:hover .btn-add-sub {
+.project-row:hover .project-actions {
     opacity: 1;
 }
 
-.btn-add-sub:hover {
+.btn-action {
+    background: none;
+    border: none;
+    color: #777;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 2px;
+}
+
+.btn-action:hover {
     color: var(--text-white);
+}
+
+.btn-action.delete:hover {
+    color: var(--danger-red);
 }
 
 /* MAIN CONTENT */
