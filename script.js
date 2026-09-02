@@ -7,9 +7,10 @@ let state = JSON.parse(localStorage.getItem('mytasks_data')) || {
 };
 
 let targetParentProjectId = null;
+let editingTaskId = null;
 const MAX_DEPTH = 3;
 
-// LIMPEZA AUTOMÁTICA EM SEGUNDO PLANO (REMOVE CONCLUÍDAS COM MAIS DE 7 DIAS)
+// LIMPEZA AUTOMÁTICA (EXCLUI CONCLUÍDAS COM MAIS DE 7 DIAS)
 function cleanupOldCompletedTasks() {
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
     const now = Date.now();
@@ -25,12 +26,14 @@ function cleanupOldCompletedTasks() {
 // --- ELEMENTOS DO DOM ---
 const projectsTreeEl = document.getElementById('projects-tree');
 const tasksListEl = document.getElementById('tasks-list');
+const historyListEl = document.getElementById('history-list');
+const historyCountEl = document.getElementById('history-count');
 const currentContextTitle = document.getElementById('current-context-title');
 const taskForm = document.getElementById('task-form');
 const taskInput = document.getElementById('task-input');
 const taskPriority = document.getElementById('task-priority');
 
-// Modal
+// Modais
 const btnNewProject = document.getElementById('btn-new-project');
 const projectModal = document.getElementById('project-modal');
 const modalTitle = document.getElementById('modal-title');
@@ -38,6 +41,12 @@ const projectNameInput = document.getElementById('project-name-input');
 const projectColorInput = document.getElementById('project-color-input');
 const btnSaveProject = document.getElementById('btn-save-project');
 const btnCancelProject = document.getElementById('btn-cancel-project');
+
+const editTaskModal = document.getElementById('edit-task-modal');
+const editTaskTextInput = document.getElementById('edit-task-text-input');
+const editTaskPriorityInput = document.getElementById('edit-task-priority-input');
+const btnSaveTaskEdit = document.getElementById('btn-save-task-edit');
+const btnCancelTaskEdit = document.getElementById('btn-cancel-task-edit');
 
 // Pomodoro
 const timerDisplay = document.getElementById('timer');
@@ -164,6 +173,7 @@ function render() {
     cleanupOldCompletedTasks();
     renderSidebar();
     renderTasks();
+    renderGlobalHistory();
 }
 
 // --- SIDEBAR E ESTRUTURA DE PROJETOS ---
@@ -205,7 +215,6 @@ function renderProjectTree(parentId, container, depth) {
     });
 }
 
-// RENOMEAR PROJETO OU SUBPROJETO
 function editProject(projectId) {
     const proj = state.projects.find(p => p.id === projectId);
     if (!proj) return;
@@ -217,7 +226,6 @@ function editProject(projectId) {
     }
 }
 
-// ENCERRAR/EXCLUIR PROJETO EM CASCATA
 function closeProject(projectId) {
     const proj = state.projects.find(p => p.id === projectId);
     if (!proj) return;
@@ -261,6 +269,33 @@ function setContext(type, projectId = null) {
     saveData();
 }
 
+// --- HISTÓRICO GLOBAL COMPACTO (ÚLTIMOS 7 DIAS) ---
+function renderGlobalHistory() {
+    historyListEl.innerHTML = '';
+    const completedTasks = state.tasks
+        .filter(t => t.completed && t.completedAt)
+        .sort((a, b) => b.completedAt - a.completedAt);
+
+    historyCountEl.innerText = completedTasks.length;
+
+    if (completedTasks.length === 0) {
+        historyListEl.innerHTML = `<li style="color: #666; font-style: italic;">Nenhuma concluída recente.</li>`;
+        return;
+    }
+
+    completedTasks.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        const dateStr = new Date(t.completedAt).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+
+        li.innerHTML = `
+            <span class="history-text" title="${t.text}">${t.text}</span>
+            <span style="font-size: 0.7rem;">${dateStr}</span>
+        `;
+        historyListEl.appendChild(li);
+    });
+}
+
 // --- MODAL DE PROJETOS ---
 btnNewProject.onclick = () => openNewProjectModal(null);
 
@@ -297,7 +332,6 @@ btnSaveProject.onclick = () => {
     saveData();
 };
 
-// OBTÊM SUBPROJETOS (ROLL-UP)
 function getAllSubProjectIds(projectId) {
     let ids = [projectId];
     const children = state.projects.filter(p => p.parentId === projectId);
@@ -371,11 +405,14 @@ function renderTasks() {
         li.innerHTML = `
             <div class="task-content">
                 <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
-                <span class="task-text" ondblclick="editTask('${task.id}')">${task.text}</span>
+                <span class="task-text" ondblclick="openEditTaskModal('${task.id}')" title="Duplo clique para editar">${task.text}</span>
                 ${isStale ? `<span class="stale-badge" title="Sem edições há ${daysInactive} dias">⚠️ ${daysInactive}d estagnada</span>` : ''}
             </div>
             ${completedBadge}
-            <button class="btn-delete" onclick="deleteTask('${task.id}')" title="Excluir permanentemente">✕</button>
+            <div class="task-actions-btn">
+                <button class="btn-action" onclick="openEditTaskModal('${task.id}')" title="Editar Tarefa e Prioridade">✏️</button>
+                <button class="btn-delete" onclick="deleteTask('${task.id}')" title="Excluir permanentemente">✕</button>
+            </div>
         `;
 
         tasksListEl.appendChild(li);
@@ -392,17 +429,31 @@ function toggleTask(id) {
     }
 }
 
-function editTask(id) {
+// EDITAR TAREFA E PRIORIDADE (MODAL)
+function openEditTaskModal(id) {
     const task = state.tasks.find(t => t.id === id);
     if (!task) return;
 
-    const newText = prompt("Editar tarefa:", task.text);
-    if (newText !== null && newText.trim() !== "") {
-        task.text = newText.trim();
+    editingTaskId = id;
+    editTaskTextInput.value = task.text;
+    editTaskPriorityInput.value = task.priority;
+    editTaskModal.classList.remove('hidden');
+}
+
+btnCancelTaskEdit.onclick = () => editTaskModal.classList.add('hidden');
+
+btnSaveTaskEdit.onclick = () => {
+    const task = state.tasks.find(t => t.id === editingTaskId);
+    const newText = editTaskTextInput.value.trim();
+
+    if (task && newText) {
+        task.text = newText;
+        task.priority = editTaskPriorityInput.value;
         task.updatedAt = Date.now();
+        editTaskModal.classList.add('hidden');
         saveData();
     }
-}
+};
 
 function deleteTask(id) {
     if (confirm("Deseja excluir permanentemente esta tarefa?")) {
