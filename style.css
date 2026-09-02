@@ -64,7 +64,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 20px;
+    margin-top: 15px;
     margin-bottom: 8px;
     padding: 0 8px;
     color: #888;
@@ -147,6 +147,61 @@ body {
 
 .btn-action.delete:hover {
     color: var(--danger-red);
+}
+
+/* HISTÓRICO COMPACTO NA SIDEBAR */
+.history-panel {
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+    margin-top: 10px;
+    max-height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 6px;
+    padding: 0 4px;
+    text-transform: uppercase;
+}
+
+.history-count {
+    background: var(--bg-hover);
+    padding: 0 6px;
+    border-radius: 10px;
+    font-weight: bold;
+    color: #2ecc71;
+}
+
+.history-list {
+    list-style: none;
+    overflow-y: auto;
+    font-size: 0.82rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    color: #888;
+    text-decoration: line-through;
+}
+
+.history-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
 }
 
 /* MAIN CONTENT */
@@ -285,6 +340,11 @@ select, input[type="text"] {
     cursor: pointer;
 }
 
+.task-actions-btn {
+    display: flex;
+    gap: 6px;
+}
+
 .stale-badge {
     background-color: rgba(230, 126, 34, 0.2);
     color: #e67e22;
@@ -321,6 +381,7 @@ select, input[type="text"] {
     display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 100;
 }
 
 .modal.hidden {
@@ -331,7 +392,7 @@ select, input[type="text"] {
     background-color: var(--bg-card);
     padding: 20px;
     border-radius: 8px;
-    width: 320px;
+    width: 340px;
     display: flex;
     flex-direction: column;
     gap: 12px;
