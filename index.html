@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciador de Tarefas e Projetos</title>
+    <title>MyTasks - Gerenciador de Tarefas</title>
+    <!-- FIX FAVICON -->
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -23,6 +25,17 @@
 
         <div class="projects-tree" id="projects-tree">
             <!-- Projetos e Subprojetos injetados via JS -->
+        </div>
+
+        <!-- PAINEL GLOBAL DE CONCLUÍDAS (ÚLTIMOS 7 DIAS) -->
+        <div class="history-panel">
+            <div class="history-header">
+                <span>✓ Concluídas (7 dias)</span>
+                <span class="history-count" id="history-count">0</span>
+            </div>
+            <ul class="history-list" id="history-list">
+                <!-- Injetado via JS -->
+            </ul>
         </div>
     </aside>
 
@@ -84,6 +97,25 @@
             <div class="modal-actions">
                 <button class="pomo-btn" style="background-color: #555;" id="btn-cancel-project">Cancelar</button>
                 <button class="btn-submit" id="btn-save-project">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE EDIÇÃO DE TAREFA -->
+    <div class="modal hidden" id="edit-task-modal">
+        <div class="modal-content">
+            <h3>Editar Tarefa</h3>
+            <input type="text" id="edit-task-text-input" placeholder="Texto da tarefa..." required>
+            <label style="color: #888; font-size: 0.85rem;">Prioridade:</label>
+            <select id="edit-task-priority-input">
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+            </select>
+            
+            <div class="modal-actions">
+                <button class="pomo-btn" style="background-color: #555;" id="btn-cancel-task-edit">Cancelar</button>
+                <button class="btn-submit" id="btn-save-task-edit">Salvar Alterações</button>
             </div>
         </div>
     </div>
