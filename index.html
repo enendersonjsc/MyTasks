@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyTasks - Gerenciador de Tarefas</title>
-    <!-- FIX FAVICON -->
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -15,7 +14,13 @@
         <h2>Produtividade</h2>
         
         <div class="nav-item active" data-type="inbox">
-            📥 Caixa de Entrada
+            <span>📥 Caixa de Entrada</span>
+            <span class="badge-count" id="count-inbox">0</span>
+        </div>
+
+        <div class="nav-item" data-type="all">
+            <span>🌐 Todas as Tarefas</span>
+            <span class="badge-count" id="count-all">0</span>
         </div>
 
         <div class="projects-header">
@@ -24,28 +29,25 @@
         </div>
 
         <div class="projects-tree" id="projects-tree">
-            <!-- Projetos e Subprojetos injetados via JS -->
+            <!-- Árvore com Accordion e Drag and Drop -->
         </div>
 
-        <!-- PAINEL GLOBAL DE CONCLUÍDAS (ÚLTIMOS 7 DIAS) -->
+        <!-- PAINEL COMPACTO DE HISTÓRICO (7 DIAS) -->
         <div class="history-panel">
             <div class="history-header">
                 <span>✓ Concluídas (7 dias)</span>
                 <span class="history-count" id="history-count">0</span>
             </div>
-            <ul class="history-list" id="history-list">
-                <!-- Injetado via JS -->
-            </ul>
+            <ul class="history-list" id="history-list"></ul>
         </div>
     </aside>
 
     <!-- CONTEÚDO PRINCIPAL -->
     <main class="main-content">
-        <!-- BARRA SUPERIOR -->
         <header class="header-bar">
             <h1 class="context-title" id="current-context-title">📥 Caixa de Entrada</h1>
 
-            <!-- POMODORO WIDGET -->
+            <!-- WIDGET POMODORO -->
             <div class="pomodoro-card">
                 <div class="timer-display" id="timer">25:00</div>
                 <button class="pomo-btn" id="start-btn">Iniciar</button>
@@ -80,13 +82,11 @@
             <button type="submit" class="btn-submit">Adicionar</button>
         </form>
 
-        <!-- LISTA DE TAREFAS -->
-        <ul class="tasks-list" id="tasks-list">
-            <!-- Tarefas injetadas via JS -->
-        </ul>
+        <!-- LISTA DE TAREFAS REORDENÁVEL -->
+        <ul class="tasks-list" id="tasks-list"></ul>
     </main>
 
-    <!-- MODAL DE NOVO PROJETO/SUBPROJETO -->
+    <!-- MODAL NOVO PROJETO -->
     <div class="modal hidden" id="project-modal">
         <div class="modal-content">
             <h3 id="modal-title">Novo Projeto</h3>
@@ -101,16 +101,16 @@
         </div>
     </div>
 
-    <!-- MODAL DE EDIÇÃO DE TAREFA -->
+    <!-- MODAL EDIÇÃO DE TAREFA -->
     <div class="modal hidden" id="edit-task-modal">
         <div class="modal-content">
             <h3>Editar Tarefa</h3>
             <input type="text" id="edit-task-text-input" placeholder="Texto da tarefa..." required>
             <label style="color: #888; font-size: 0.85rem;">Prioridade:</label>
             <select id="edit-task-priority-input">
-                <option value="low">Baixa</option>
-                <option value="medium">Média</option>
-                <option value="high">Alta</option>
+                <option value="low">Baixa (Verde)</option>
+                <option value="medium">Média (Amarelo)</option>
+                <option value="high">Alta (Vermelho)</option>
             </select>
             
             <div class="modal-actions">
