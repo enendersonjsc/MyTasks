@@ -3,119 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTasks - Gerenciador de Tarefas</title>
+    <title>MyTasks - Lista de Tarefas</title>
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-
-    <!-- SIDEBAR -->
-    <aside class="sidebar">
-        <h2>Produtividade</h2>
-        
-        <div class="nav-item active" data-type="inbox">
-            <span>📥 Caixa de Entrada</span>
-            <span class="badge-count" id="count-inbox">0</span>
-        </div>
-
-        <div class="nav-item" data-type="all">
-            <span>🌐 Todas as Tarefas</span>
-            <span class="badge-count" id="count-all">0</span>
-        </div>
-
-        <div class="projects-header">
-            <span>Projetos</span>
-            <button class="btn-add-main" id="btn-new-project" title="Criar Projeto Principal">+</button>
-        </div>
-
-        <div class="projects-tree" id="projects-tree">
-            <!-- Árvore com Accordion e Drag and Drop -->
-        </div>
-
-        <!-- PAINEL COMPACTO DE HISTÓRICO (7 DIAS) -->
-        <div class="history-panel">
-            <div class="history-header">
-                <span>✓ Concluídas (7 dias)</span>
-                <span class="history-count" id="history-count">0</span>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-list-check logo-icon"></i>
+                <h2>MyTasks</h2>
             </div>
-            <ul class="history-list" id="history-list"></ul>
-        </div>
-    </aside>
 
-    <!-- CONTEÚDO PRINCIPAL -->
-    <main class="main-content">
-        <header class="header-bar">
-            <h1 class="context-title" id="current-context-title">📥 Caixa de Entrada</h1>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" id="nav-all-tasks">
+                    <i class="fa-solid fa-globe"></i>
+                    <span>Todas as Tarefas</span>
+                    <span class="badge" id="badge-all">0</span>
+                </button>
+                <button class="nav-item" id="nav-inbox">
+                    <i class="fa-solid fa-inbox"></i>
+                    <span>Caixa de Entrada</span>
+                    <span class="badge" id="badge-inbox">0</span>
+                </button>
+            </nav>
 
-            <!-- WIDGET POMODORO -->
-            <div class="pomodoro-card">
-                <div class="timer-display" id="timer">25:00</div>
-                <button class="pomo-btn" id="start-btn">Iniciar</button>
-                <button class="pomo-btn" id="pause-btn" disabled>Pausar</button>
-                <button class="pomo-btn" id="reset-btn">Reset</button>
-
-                <div class="pomo-selects">
-                    <select id="sound-focus" title="Som Foco">
-                        <option value="double-alarm">Alarme</option>
-                        <option value="beep">Beep</option>
-                        <option value="zen">Zen</option>
-                        <option value="silent">Mudo</option>
-                    </select>
-                    <select id="sound-break" title="Som Pausa">
-                        <option value="beep">Beep</option>
-                        <option value="double-alarm">Alarme</option>
-                        <option value="zen">Zen</option>
-                        <option value="silent">Mudo</option>
-                    </select>
+            <div class="projects-section">
+                <div class="projects-header">
+                    <span>PROJETOS</span>
+                    <button id="btn-add-project" title="Criar Projeto"><i class="fa-solid fa-plus"></i></button>
                 </div>
+                <ul class="projects-list" id="projects-tree">
+                    <!-- Árvore de projetos renderizada dinamicamente -->
+                </ul>
             </div>
-        </header>
 
-        <!-- FORMULÁRIO DE TAREFAS -->
-        <form class="task-form" id="task-form">
-            <input type="text" class="task-input" id="task-input" placeholder="Adicionar nova tarefa..." required>
-            <select id="task-priority">
-                <option value="low">Baixa</option>
-                <option value="medium" selected>Média</option>
-                <option value="high">Alta</option>
-            </select>
-            <button type="submit" class="btn-submit">Adicionar</button>
-        </form>
-
-        <!-- LISTA DE TAREFAS REORDENÁVEL -->
-        <ul class="tasks-list" id="tasks-list"></ul>
-    </main>
-
-    <!-- MODAL NOVO PROJETO -->
-    <div class="modal hidden" id="project-modal">
-        <div class="modal-content">
-            <h3 id="modal-title">Novo Projeto</h3>
-            <input type="text" id="project-name-input" placeholder="Nome do projeto..." required>
-            <label style="color: #888; font-size: 0.85rem;">Cor do Projeto:</label>
-            <input type="color" id="project-color-input" value="#3498db" style="width: 100%; height: 35px; cursor: pointer;">
-            
-            <div class="modal-actions">
-                <button class="pomo-btn" style="background-color: #555;" id="btn-cancel-project">Cancelar</button>
-                <button class="btn-submit" id="btn-save-project">Salvar</button>
+            <!-- Widget Histórico Compacto (7 Dias) -->
+            <div class="history-widget">
+                <div class="history-header">
+                    <span><i class="fa-solid fa-clock-rotate-left"></i> Histórico (7 dias)</span>
+                    <span class="history-count" id="history-counter">0</span>
+                </div>
+                <ul class="history-list" id="history-list">
+                    <!-- Itens concluídos nos últimos 7 dias -->
+                </ul>
             </div>
-        </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Pomodoro Bar Header -->
+            <header class="top-bar">
+                <div class="pomodoro-widget">
+                    <div class="pomodoro-status">
+                        <span id="pomo-mode">Foco</span>
+                        <span id="pomo-timer">25:00</span>
+                    </div>
+                    <div class="pomodoro-controls">
+                        <button id="pomo-start-btn" class="btn-pomo"><i class="fa-solid fa-play"></i></button>
+                        <button id="pomo-reset-btn" class="btn-pomo"><i class="fa-solid fa-rotate-right"></i></button>
+                        <select id="pomo-sound-select" class="pomo-sound-picker">
+                            <option value="beep">Beep</option>
+                            <option value="alarm">Alarme Duplo</option>
+                            <option value="zen">Zen</option>
+                            <option value="mute">Mudo</option>
+                        </select>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <section class="content-header">
+                <div class="title-area">
+                    <h1 id="current-view-title">Todas as Tarefas</h1>
+                    <span class="subtitle" id="current-view-subtitle">Visão Consolidada</span>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-clear-completed" class="btn-secondary" title="Ocultar concluídas da lista mantendo no histórico de 7 dias">
+                        <i class="fa-solid fa-broom"></i> Limpar Concluídas
+                    </button>
+                </div>
+            </section>
+
+            <!-- Task Input Form -->
+            <form id="add-task-form" class="task-form">
+                <input type="text" id="task-input-text" placeholder="Adicionar nova tarefa..." required>
+                <input type="date" id="task-input-date" title="Data Limite (Opcional)">
+                <select id="task-input-priority" required>
+                    <option value="high">🔴 Alta</option>
+                    <option value="medium" selected>🟡 Média</option>
+                    <option value="low">🟢 Baixa</option>
+                </select>
+                <button type="submit" class="btn-primary"><i class="fa-solid fa-plus"></i> Adicionar</button>
+            </form>
+
+            <!-- Task List -->
+            <div class="tasks-container">
+                <ul id="tasks-list" class="tasks-list">
+                    <!-- Tarefas renderizadas dinamicamente -->
+                </ul>
+            </div>
+        </main>
     </div>
 
-    <!-- MODAL EDIÇÃO DE TAREFA -->
-    <div class="modal hidden" id="edit-task-modal">
+    <!-- Modal Editar Tarefa -->
+    <div class="modal" id="modal-edit-task">
         <div class="modal-content">
             <h3>Editar Tarefa</h3>
-            <input type="text" id="edit-task-text-input" placeholder="Texto da tarefa..." required>
-            <label style="color: #888; font-size: 0.85rem;">Prioridade:</label>
-            <select id="edit-task-priority-input">
-                <option value="low">Baixa (Verde)</option>
-                <option value="medium">Média (Amarelo)</option>
-                <option value="high">Alta (Vermelho)</option>
+            <input type="text" id="edit-task-text" placeholder="Nome da tarefa">
+            <label for="edit-task-date">Data limite:</label>
+            <input type="date" id="edit-task-date">
+            <label for="edit-task-priority">Prioridade:</label>
+            <select id="edit-task-priority">
+                <option value="high">🔴 Alta</option>
+                <option value="medium">🟡 Média</option>
+                <option value="low">🟢 Baixa</option>
             </select>
-            
             <div class="modal-actions">
-                <button class="pomo-btn" style="background-color: #555;" id="btn-cancel-task-edit">Cancelar</button>
-                <button class="btn-submit" id="btn-save-task-edit">Salvar Alterações</button>
+                <button id="btn-cancel-edit" class="btn-secondary">Cancelar</button>
+                <button id="btn-save-edit" class="btn-primary">Salvar</button>
             </div>
         </div>
     </div>
