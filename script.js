@@ -1,476 +1,614 @@
-/**
- * MyTasks - Regras de Negócio & Persistência
- */
+/* --- MYTASKS LOGIC & STATE ENGINE --- */
+
+const STATE_KEY = 'mytasks_state';
 
 let state = {
     tasks: [],
     projects: [],
-    currentView: 'all', // 'all', 'inbox', ou ID do projeto
-    editingTaskId: null
+    expandedProjects: [],
+    currentContext: 'inbox', // 'inbox', 'all', ou ID do projeto
+    pomodoro: {
+        mode: 'focus', // 'focus', 'short', 'long'
+        timeLeft: 25 * 60,
+        isRunning: false,
+        lastTick: null,
+        sound: 'beep'
+    }
 };
 
-// Pomodoro State
-let pomodoro = {
-    timeLeft: 1500, // 25 min
-    isRunning: false,
-    timerId: null,
-    endTime: null,
-    sound: 'beep'
-};
+let pomoInterval = null;
+let audioCtx = null;
 
-// --- INICIALIZAÇÃO ---
+// Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    loadLocalStorage();
+    loadState();
     cleanupOldCompletedTasks();
-    setupEventListeners();
-    render();
+    renderSidebar();
+    renderTasks();
+    initPomodoroDisplay();
+
+    // Sincronização do input de cor Hex
+    const colorInput = document.getElementById('project-color');
+    if (colorInput) {
+        colorInput.addEventListener('input', (e) => {
+            document.getElementById('project-color-hex').innerText = e.target.value;
+        });
+    }
 });
 
-function loadLocalStorage() {
-    const savedState = localStorage.getItem('mytasks_state');
-    if (savedState) {
-        state = JSON.parse(savedState);
-    } else {
-        // Estrutura Inicial Padrão
-        state.projects = [
-            { id: 'p1', name: 'Trabalho', color: '#f75a68', parentId: null, expanded: true },
-            { id: 'p2', name: 'Estudos', color: '#04d361', parentId: null, expanded: true }
-        ];
-        saveLocalStorage();
+/* --- PERSISTÊNCIA --- */
+function saveState() {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+    const data = localStorage.getItem(STATE_KEY);
+    if (data) {
+        try {
+            state = Object.assign(state, JSON.parse(data));
+        } catch (e) {
+            console.error("Erro ao carregar estado do localStorage", e);
+        }
     }
 }
 
-function saveLocalStorage() {
-    localStorage.setItem('mytasks_state', JSON.stringify(state));
-}
-
-// Expurgar do localStorage concluídas a mais de 7 dias
+/* --- LIMPEZA DE TAREFAS CONCLUÍDAS (> 7 DIAS) --- */
 function cleanupOldCompletedTasks() {
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
     const now = Date.now();
+
     state.tasks = state.tasks.filter(task => {
         if (task.completed && task.completedAt) {
-            return (now - new Date(task.completedAt).getTime()) < SEVEN_DAYS_MS;
+            return (now - task.completedAt) < SEVEN_DAYS_MS;
         }
         return true;
     });
-    saveLocalStorage();
+    saveState();
 }
 
-// --- EVENT LISTENERS ---
-function setupEventListeners() {
-    // Navegação Sidebar
-    document.getElementById('nav-all-tasks').addEventListener('click', () => switchView('all'));
-    document.getElementById('nav-inbox').addEventListener('click', () => switchView('inbox'));
-    document.getElementById('btn-add-project').addEventListener('click', createProject);
-
-    // Formulário de Tarefa
-    document.getElementById('add-task-form').addEventListener('submit', handleAddTask);
+/* --- GESTÃO DE CONTEXTO E NAVEGAÇÃO --- */
+function switchContext(contextId) {
+    state.currentContext = contextId;
     
-    // Limpar Concluídas (Ocultar da lista mantendo no histórico de 7 dias)
-    document.getElementById('btn-clear-completed').addEventListener('click', handleClearCompleted);
-
-    // Modal de Edição
-    document.getElementById('btn-cancel-edit').addEventListener('click', closeModal);
-    document.getElementById('btn-save-edit').addEventListener('click', handleSaveEdit);
-
-    // Pomodoro
-    document.getElementById('pomo-start-btn').addEventListener('click', togglePomodoro);
-    document.getElementById('pomo-reset-btn').addEventListener('click', resetPomodoro);
-    document.getElementById('pomo-sound-select').addEventListener('change', (e) => pomodoro.sound = e.target.value);
-}
-
-function switchView(view) {
-    state.currentView = view;
-    render();
-}
-
-// --- GESTÃO DE TAREFAS ---
-function handleAddTask(e) {
-    e.preventDefault();
-    const textInput = document.getElementById('task-input-text');
-    const dateInput = document.getElementById('task-input-date');
-    const priorityInput = document.getElementById('task-input-priority');
-
-    const newTask = {
-        id: 't_' + Date.now(),
-        text: textInput.value.trim(),
-        projectId: (state.currentView === 'all') ? 'inbox' : state.currentView,
-        priority: priorityInput.value, // 'high', 'medium', 'low'
-        dueDate: dateInput.value || null,
-        completed: false,
-        hiddenFromList: false, // flag para a ação "Limpar Concluídas"
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        completedAt: null
-    };
-
-    state.tasks.push(newTask);
-    saveLocalStorage();
-    textInput.value = '';
-    dateInput.value = '';
-    render();
-}
-
-function toggleTaskComplete(taskId) {
-    const task = state.tasks.find(t => t.id === taskId);
-    if (task) {
-        task.completed = !task.completed;
-        task.completedAt = task.completed ? new Date().toISOString() : null;
-        task.updatedAt = new Date().toISOString();
-        saveLocalStorage();
-        render();
-    }
-}
-
-function deleteTask(taskId) {
-    if (confirm('Deseja excluir esta tarefa definitivamente?')) {
-        state.tasks = state.tasks.filter(t => t.id !== taskId);
-        saveLocalStorage();
-        render();
-    }
-}
-
-// Limpar Concluídas: oculta da visualização sem apagar do histórico de 7 dias
-function handleClearCompleted() {
-    const activeViewTasks = getTasksForCurrentView();
-    activeViewTasks.forEach(t => {
-        if (t.completed) {
-            t.hiddenFromList = true;
+    document.querySelectorAll('.nav-item, .tree-item').forEach(el => el.classList.remove('active'));
+    
+    if (contextId === 'inbox') {
+        document.getElementById('nav-inbox').classList.add('active');
+        document.getElementById('current-context-title').innerText = '📥 Caixa de Entrada';
+        document.getElementById('current-context-subtitle').innerText = 'Tarefas sem projeto atribuído';
+    } else if (contextId === 'all') {
+        document.getElementById('nav-all').classList.add('active');
+        document.getElementById('current-context-title').innerText = '🌐 Todas as Tarefas';
+        document.getElementById('current-context-subtitle').innerText = 'Visão global das tarefas ativas';
+    } else {
+        const proj = state.projects.find(p => p.id === contextId);
+        if (proj) {
+            const elem = document.querySelector(`[data-project-id="${contextId}"]`);
+            if (elem) elem.classList.add('active');
+            document.getElementById('current-context-title').innerText = `📁 ${proj.name}`;
+            document.getElementById('current-context-subtitle').innerText = `Tarefas do projeto e subprojetos`;
         }
+    }
+
+    renderTasks();
+}
+
+/* --- REGRAS DE ROLL-UP E PROJETOS --- */
+function getProjectDescendants(projectId) {
+    let ids = [projectId];
+    const children = state.projects.filter(p => p.parentId === projectId);
+    children.forEach(child => {
+        ids = ids.concat(getProjectDescendants(child.id));
     });
-    saveLocalStorage();
-    render();
+    return ids;
 }
 
-// --- EDICÃO DE TAREFA ---
-function openEditModal(taskId) {
-    const task = state.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    state.editingTaskId = taskId;
-    document.getElementById('edit-task-text').value = task.text;
-    document.getElementById('edit-task-date').value = task.dueDate || '';
-    document.getElementById('edit-task-priority').value = task.priority;
-    
-    document.getElementById('modal-edit-task').classList.add('active');
-}
-
-function closeModal() {
-    document.getElementById('modal-edit-task').classList.remove('active');
-    state.editingTaskId = null;
-}
-
-function handleSaveEdit() {
-    const task = state.tasks.find(t => t.id === state.editingTaskId);
-    if (task) {
-        task.text = document.getElementById('edit-task-text').value.trim();
-        task.dueDate = document.getElementById('edit-task-date').value || null;
-        task.priority = document.getElementById('edit-task-priority').value;
-        task.updatedAt = new Date().toISOString();
-        saveLocalStorage();
-        render();
-    }
-    closeModal();
-}
-
-// --- GESTÃO DE PROJETOS & HIERARQUIA ---
-function createProject(parentId = null) {
-    const name = prompt('Nome do Projeto:');
-    if (!name) return;
-
-    // Verificar Limite de 3 Níveis
-    if (parentId) {
-        const depth = getProjectDepth(parentId);
-        if (depth >= 3) {
-            alert('Atingido o limite máximo de 3 níveis de profundidade!');
-            return;
-        }
-    }
-
-    const colors = ['#f75a68', '#fba94c', '#04d361', '#8257e5', '#12a454', '#00b4d8'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
-    const newProject = {
-        id: 'p_' + Date.now(),
-        name: name,
-        color: randomColor,
-        parentId: typeof parentId === 'string' ? parentId : null,
-        expanded: true
-    };
-
-    state.projects.push(newProject);
-    saveLocalStorage();
-    render();
-}
-
-function getProjectDepth(projectId) {
+function getProjectDepth(parentId) {
     let depth = 1;
-    let curr = state.projects.find(p => p.id === projectId);
-    while (curr && curr.parentId) {
+    let curr = state.projects.find(p => p.id === parentId);
+    while (curr) {
         depth++;
         curr = state.projects.find(p => p.id === curr.parentId);
     }
     return depth;
 }
 
-function deleteProject(projectId) {
-    if (!confirm('Excluir este projeto, seus subprojetos e todas as tarefas vinculadas em cascata?')) return;
-
-    // Coletar IDs em cascata
-    const idsToDelete = [projectId];
-    function collectSubIds(pId) {
-        const subs = state.projects.filter(p => p.parentId === pId);
-        subs.forEach(s => {
-            idsToDelete.push(s.id);
-            collectSubIds(s.id);
-        });
-    }
-    collectSubIds(projectId);
-
-    state.projects = state.projects.filter(p => !idsToDelete.includes(p.id));
-    state.tasks = state.tasks.filter(t => !idsToDelete.includes(t.projectId));
-
-    if (idsToDelete.includes(state.currentView)) {
-        state.currentView = 'all';
-    }
-
-    saveLocalStorage();
-    render();
-}
-
-function toggleAccordion(projectId, e) {
-    e.stopPropagation();
-    const proj = state.projects.find(p => p.id === projectId);
-    if (proj) {
-        proj.expanded = !proj.expanded;
-        saveLocalStorage();
-        render();
-    }
-}
-
-// Obter IDs de projetos para Roll-up
-function getProjectAndSubprojectIds(parentId) {
-    let ids = [parentId];
-    const subs = state.projects.filter(p => p.parentId === parentId);
-    subs.forEach(s => {
-        ids = ids.concat(getProjectAndSubprojectIds(s.id));
-    });
-    return ids;
-}
-
-// --- REGRAS DE RENDERIZAÇÃO & ORDENAÇÃO ---
-function getTasksForCurrentView() {
-    if (state.currentView === 'all') {
-        return state.tasks;
-    } else if (state.currentView === 'inbox') {
-        return state.tasks.filter(t => t.projectId === 'inbox');
-    } else {
-        const projectIds = getProjectAndSubprojectIds(state.currentView);
-        return state.tasks.filter(t => projectIds.includes(t.projectId));
-    }
-}
-
-function render() {
-    renderSidebar();
-    renderTasks();
-    renderHistory();
-    updateBadges();
-}
-
-function updateBadges() {
-    const activeTasks = state.tasks.filter(t => !t.completed);
-    document.getElementById('badge-all').innerText = activeTasks.length;
-    document.getElementById('badge-inbox').innerText = activeTasks.filter(t => t.projectId === 'inbox').length;
-}
-
+/* --- RENDERAÇÃO DA SIDEBAR E ÁRVORE --- */
 function renderSidebar() {
-    const container = document.getElementById('projects-tree');
-    container.innerHTML = '';
+    // Atualizar Contadores
+    const activeTasks = state.tasks.filter(t => !t.completed && !t.hiddenFromView);
+    
+    document.getElementById('badge-inbox').innerText = activeTasks.filter(t => !t.projectId).length;
+    document.getElementById('badge-all').innerText = activeTasks.length;
 
-    // Renderizar projetos de nível raiz (parentId = null)
+    const treeContainer = document.getElementById('projects-tree');
+    treeContainer.innerHTML = '';
+
     const rootProjects = state.projects.filter(p => !p.parentId);
     rootProjects.forEach(proj => {
-        container.appendChild(createProjectDOM(proj));
+        treeContainer.appendChild(createProjectNode(proj, 0));
     });
 
-    // Atualizar classe ativa nas navs padrão
-    document.getElementById('nav-all-tasks').classList.toggle('active', state.currentView === 'all');
-    document.getElementById('nav-inbox').classList.toggle('active', state.currentView === 'inbox');
+    saveState();
 }
 
-function createProjectDOM(project) {
-    const li = document.createElement('li');
-    li.className = 'project-item';
-
-    const subprojects = state.projects.filter(p => p.parentId === project.id);
-    const hasSub = subprojects.length > 0;
+function createProjectNode(project, depth) {
+    const container = document.createElement('div');
     
-    // Contagem de tarefas pendentes no projeto + subprojetos
-    const projectIds = getProjectAndSubprojectIds(project.id);
-    const pendingCount = state.tasks.filter(t => !t.completed && projectIds.includes(t.projectId)).length;
+    const children = state.projects.filter(p => p.parentId === project.id);
+    const hasChildren = children.length > 0;
+    const isExpanded = state.expandedProjects.includes(project.id);
 
-    const node = document.createElement('div');
-    node.className = `project-node ${state.currentView === project.id ? 'active' : ''}`;
-    node.onclick = () => switchView(project.id);
-    node.ondblclick = () => {
-        const newName = prompt('Renomear Projeto:', project.name);
-        if (newName) { project.name = newName; saveLocalStorage(); render(); }
+    // Contagem Roll-up
+    const projectFamily = getProjectDescendants(project.id);
+    const count = state.tasks.filter(t => !t.completed && !t.hiddenFromView && projectFamily.includes(t.projectId)).length;
+
+    const item = document.createElement('div');
+    item.className = `tree-item tree-indent-${depth}`;
+    if (state.currentContext === project.id) item.classList.add('active');
+    item.setAttribute('data-project-id', project.id);
+    item.onclick = (e) => {
+        e.stopPropagation();
+        switchContext(project.id);
+    };
+    item.ondblclick = (e) => {
+        e.stopPropagation();
+        openProjectModal(project.id);
     };
 
-    node.innerHTML = `
-        ${hasSub ? `<button class="accordion-toggle">${project.expanded ? '▾' : '▸'}</button>` : '<span style="width:14px"></span>'}
-        <span class="project-color-dot" style="background-color: ${project.color}"></span>
-        <span class="project-title">${project.name}</span>
-        <span class="badge">${pendingCount}</span>
-        <div class="project-actions">
-            <button title="Subprojeto" onclick="event.stopPropagation(); createProject('${project.id}')"><i class="fa-solid fa-plus"></i></button>
-            <button title="Excluir" onclick="event.stopPropagation(); deleteProject('${project.id}')"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-    `;
+    const toggle = document.createElement('span');
+    toggle.className = 'tree-toggle';
+    toggle.innerText = hasChildren ? (isExpanded ? '▾' : '▸') : '';
+    toggle.onclick = (e) => {
+        e.stopPropagation();
+        toggleProjectAccordion(project.id);
+    };
 
-    if (hasSub) {
-        const toggleBtn = node.querySelector('.accordion-toggle');
-        toggleBtn.onclick = (e) => toggleAccordion(project.id, e);
+    const dot = document.createElement('span');
+    dot.className = 'project-color-dot';
+    dot.style.backgroundColor = project.color || '#3b82f6';
+
+    const title = document.createElement('span');
+    title.className = 'nav-title';
+    title.innerText = project.name;
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.innerText = count;
+
+    const actions = document.createElement('div');
+    actions.className = 'tree-actions';
+    
+    if (depth < 2) { // Limite de 3 níveis (0, 1, 2)
+        const addSubBtn = document.createElement('button');
+        addSubBtn.className = 'btn-icon';
+        addSubBtn.innerText = '+';
+        addSubBtn.title = 'Criar Subprojeto';
+        addSubBtn.onclick = (e) => {
+            e.stopPropagation();
+            openProjectModal(null, project.id);
+        };
+        actions.appendChild(addSubBtn);
     }
 
-    li.appendChild(node);
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-icon';
+    editBtn.innerText = '✏️';
+    editBtn.title = 'Editar Projeto';
+    editBtn.onclick = (e) => {
+        e.stopPropagation();
+        openProjectModal(project.id);
+    };
 
-    if (hasSub) {
-        const ulSub = document.createElement('ul');
-        ulSub.className = `subprojects-list ${project.expanded ? 'expanded' : ''}`;
-        subprojects.forEach(sub => {
-            ulSub.appendChild(createProjectDOM(sub));
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-icon';
+    delBtn.innerText = '✕';
+    delBtn.title = 'Excluir Projeto';
+    delBtn.onclick = (e) => {
+        e.stopPropagation();
+        deleteProject(project.id);
+    };
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    item.appendChild(toggle);
+    item.appendChild(dot);
+    item.appendChild(title);
+    item.appendChild(badge);
+    item.appendChild(actions);
+
+    container.appendChild(item);
+
+    if (hasChildren && isExpanded) {
+        children.forEach(child => {
+            container.appendChild(createProjectNode(child, depth + 1));
         });
-        li.appendChild(ulSub);
     }
 
-    return li;
+    return container;
+}
+
+function toggleProjectAccordion(projectId) {
+    if (state.expandedProjects.includes(projectId)) {
+        state.expandedProjects = state.expandedProjects.filter(id => id !== projectId);
+    } else {
+        state.expandedProjects.push(projectId);
+    }
+    renderSidebar();
+}
+
+/* --- GESTÃO DE PROJETOS (MODAL) --- */
+function openProjectModal(editId = null, parentId = null) {
+    const modal = document.getElementById('project-modal');
+    const form = document.getElementById('project-form');
+    
+    form.reset();
+    document.getElementById('project-edit-id').value = editId || '';
+    document.getElementById('project-parent-id').value = parentId || '';
+
+    if (editId) {
+        const proj = state.projects.find(p => p.id === editId);
+        if (proj) {
+            document.getElementById('project-modal-title').innerText = 'Editar Projeto';
+            document.getElementById('project-name').value = proj.name;
+            document.getElementById('project-color').value = proj.color || '#3b82f6';
+            document.getElementById('project-color-hex').innerText = proj.color || '#3b82f6';
+        }
+    } else {
+        document.getElementById('project-modal-title').innerText = parentId ? 'Novo Subprojeto' : 'Novo Projeto';
+        document.getElementById('project-color').value = '#3b82f6';
+        document.getElementById('project-color-hex').innerText = '#3b82f6';
+    }
+
+    modal.classList.add('active');
+}
+
+function closeProjectModal() {
+    document.getElementById('project-modal').classList.remove('active');
+}
+
+function handleSaveProject(e) {
+    e.preventDefault();
+    const editId = document.getElementById('project-edit-id').value;
+    const parentId = document.getElementById('project-parent-id').value || null;
+    const name = document.getElementById('project-name').value.trim();
+    const color = document.getElementById('project-color').value;
+
+    if (!name) return;
+
+    if (editId) {
+        const proj = state.projects.find(p => p.id === editId);
+        if (proj) {
+            proj.name = name;
+            proj.color = color;
+        }
+    } else {
+        if (parentId && getProjectDepth(parentId) >= 3) {
+            alert('Limite máximo de 3 níveis de profundidade atingido.');
+            return;
+        }
+        const newProj = {
+            id: 'proj_' + Date.now(),
+            name,
+            color,
+            parentId
+        };
+        state.projects.push(newProj);
+        if (parentId && !state.expandedProjects.includes(parentId)) {
+            state.expandedProjects.push(parentId);
+        }
+    }
+
+    closeProjectModal();
+    renderSidebar();
+    renderTasks();
+}
+
+function deleteProject(projectId) {
+    if (!confirm('Deseja excluir este projeto, todos os seus subprojetos e tarefas vinculadas?')) return;
+
+    const family = getProjectDescendants(projectId);
+    state.projects = state.projects.filter(p => !family.includes(p.id));
+    state.tasks = state.tasks.filter(t => !family.includes(t.projectId));
+
+    if (family.includes(state.currentContext)) {
+        state.currentContext = 'inbox';
+    }
+
+    renderSidebar();
+    renderTasks();
+}
+
+/* --- GESTÃO E ORDENAÇÃO DE TAREFAS --- */
+function handleAddTask(e) {
+    e.preventDefault();
+    const textInput = document.getElementById('task-text');
+    const prioritySelect = document.getElementById('task-priority');
+    const dueDateInput = document.getElementById('task-due-date');
+
+    const text = textInput.value.trim();
+    if (!text) return;
+
+    let targetProjectId = null;
+    if (state.currentContext !== 'inbox' && state.currentContext !== 'all') {
+        targetProjectId = state.currentContext;
+    }
+
+    const newTask = {
+        id: 'task_' + Date.now(),
+        text,
+        priority: prioritySelect.value, // 'low', 'medium', 'high'
+        dueDate: dueDateInput.value || null,
+        projectId: targetProjectId,
+        completed: false,
+        completedAt: null,
+        updatedAt: Date.now(),
+        hiddenFromView: false
+    };
+
+    state.tasks.push(newTask);
+    textInput.value = '';
+    dueDateInput.value = '';
+
+    renderSidebar();
+    renderTasks();
+}
+
+function getFilteredTasks() {
+    let filtered = state.tasks.filter(t => !t.completed && !t.hiddenFromView);
+
+    if (state.currentContext === 'inbox') {
+        filtered = filtered.filter(t => !t.projectId);
+    } else if (state.currentContext !== 'all') {
+        const family = getProjectDescendants(state.currentContext);
+        filtered = filtered.filter(t => family.includes(t.projectId));
+    }
+
+    // Regra OBRIGATÓRIA de Ordenação por Prioridade: Alta -> Média -> Baixa
+    const priorityOrder = { high: 1, medium: 2, low: 3 };
+    filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+    return filtered;
 }
 
 function renderTasks() {
-    const listContainer = document.getElementById('tasks-list');
-    listContainer.innerHTML = '';
+    const container = document.getElementById('active-tasks-list');
+    container.innerHTML = '';
 
-    // Atualizar Título da Visão
-    const titleElem = document.getElementById('current-view-title');
-    if (state.currentView === 'all') titleElem.innerText = 'Todas as Tarefas';
-    else if (state.currentView === 'inbox') titleElem.innerText = 'Caixa de Entrada';
-    else {
-        const proj = state.projects.find(p => p.id === state.currentView);
-        titleElem.innerText = proj ? proj.name : 'Projeto';
+    const tasksToDisplay = getFilteredTasks();
+
+    if (tasksToDisplay.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-muted);">Nenhuma tarefa pendente por aqui! ✨</div>`;
+        return;
     }
 
-    let viewTasks = getTasksForCurrentView();
+    const now = new Date().setHours(0,0,0,0);
+    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 
-    // Filtrar tarefas marcadas como ocultas via "Limpar Concluídas"
-    viewTasks = viewTasks.filter(t => !t.hiddenFromList);
-
-    // ORDENAÇÃO OBRIGATÓRIA: Prioridade Alta -> Média -> Baixa
-    const priorityWeight = { high: 3, medium: 2, low: 1 };
-    viewTasks.sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
-
-    viewTasks.forEach(task => {
-        const card = document.createElement('li');
+    tasksToDisplay.forEach(task => {
+        const card = document.createElement('div');
         card.className = `task-card priority-${task.priority}`;
-        card.ondblclick = () => openEditModal(task.id);
 
-        // Cor do Projeto na Borda Esquerda
-        let projectColor = '#8d8d99'; // padrão caixa de entrada
-        if (task.projectId !== 'inbox') {
-            const p = state.projects.find(proj => proj.id === task.projectId);
-            if (p) projectColor = p.color;
-        }
-        card.style.borderLeftColor = projectColor;
-
-        // Cálculos de Alerta (Vencimento e Estagnação 15 dias)
-        const now = new Date();
-        let isOverdue = false;
-        let isStagnant = false;
-        let stagnantDays = 0;
-
-        if (!task.completed) {
-            if (task.dueDate) {
-                const due = new Date(task.dueDate + 'T23:59:59');
-                if (now > due) isOverdue = true;
-            } else if (task.updatedAt) {
-                const updated = new Date(task.updatedAt);
-                const diffTime = Math.abs(now - updated);
-                stagnantDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                if (stagnantDays >= 15) isStagnant = true;
+        // Lado Esquerdo: Cor do Projeto
+        if (task.projectId) {
+            const proj = state.projects.find(p => p.id === task.projectId);
+            if (proj) {
+                card.style.borderLeftColor = proj.color || '#3b82f6';
             }
         }
 
-        card.innerHTML = `
-            <div class="task-main">
-                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTaskComplete('${task.id}')">
-                <span class="task-text" style="${task.completed ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${task.text}</span>
-                <div class="task-tags">
-                    ${isOverdue ? `<span class="tag-alert"><i class="fa-solid fa-triangle-exclamation"></i> Vencida</span>` : ''}
-                    ${isStagnant ? `<span class="tag-stagnant"><i class="fa-solid fa-clock"></i> ⚠️ ${stagnantDays}d estagnada</span>` : ''}
-                    ${task.dueDate ? `<span class="tag-date"><i class="fa-regular fa-calendar"></i> ${formatDate(task.dueDate)}</span>` : ''}
-                </div>
-            </div>
-            <div class="task-card-actions">
-                <button title="Editar" onclick="openEditModal('${task.id}')"><i class="fa-solid fa-pen"></i></button>
-                <button title="Excluir" onclick="deleteTask('${task.id}')"><i class="fa-solid fa-trash"></i></button>
-            </div>
-        `;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'task-checkbox';
+        checkbox.checked = task.completed;
+        checkbox.onclick = () => toggleTaskComplete(task.id);
 
-        listContainer.appendChild(card);
+        const body = document.createElement('div');
+        body.className = 'task-body';
+        body.ondblclick = () => openTaskEditModal(task.id);
+
+        const title = document.createElement('div');
+        title.className = 'task-title';
+        title.innerText = task.text;
+
+        const meta = document.createElement('div');
+        meta.className = 'task-meta';
+
+        // Tag de Projeto
+        if (task.projectId) {
+            const proj = state.projects.find(p => p.id === task.projectId);
+            if (proj) {
+                const projTag = document.createElement('span');
+                projTag.className = 'task-tag';
+                projTag.innerText = `📁 ${proj.name}`;
+                meta.appendChild(projTag);
+            }
+        }
+
+        // Alertas de Vencimento e Estagnação
+        if (task.dueDate) {
+            const due = new Date(task.dueDate + 'T00:00:00').getTime();
+            const dateStr = new Date(task.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');
+            const dateTag = document.createElement('span');
+            
+            if (due < now) {
+                dateTag.className = 'alert-tag';
+                dateTag.innerText = `🚨 Vencida em ${dateStr}`;
+            } else {
+                dateTag.innerText = `📅 Limit: ${dateStr}`;
+            }
+            meta.appendChild(dateTag);
+        } else {
+            // Alerta de Estagnação (15 dias sem edição/prazo)
+            const daysUnupdated = (Date.now() - (task.updatedAt || Date.now())) / (1000 * 60 * 60 * 24);
+            if (daysUnupdated >= 15) {
+                const stagTag = document.createElement('span');
+                stagTag.className = 'warning-tag';
+                stagTag.innerText = `⚠️ Estagnada há ${Math.floor(daysUnupdated)}d`;
+                meta.appendChild(stagTag);
+            }
+        }
+
+        body.appendChild(title);
+        body.appendChild(meta);
+
+        card.appendChild(checkbox);
+        card.appendChild(body);
+
+        container.appendChild(card);
     });
+
+    saveState();
 }
 
-function renderHistory() {
-    const historyContainer = document.getElementById('history-list');
-    historyContainer.innerHTML = '';
-
-    // Filtra concluídas nos últimos 7 dias
-    const completedTasks = state.tasks.filter(t => t.completed && t.completedAt);
-    document.getElementById('history-counter').innerText = completedTasks.length;
-
-    completedTasks.sort((a,b) => new Date(b.completedAt) - new Date(a.completedAt));
-
-    completedTasks.forEach(task => {
-        const li = document.createElement('li');
-        li.className = 'history-item';
-        li.innerHTML = `
-            <span>✓ ${task.text}</span>
-            <span class="history-date">${formatDate(task.completedAt)}</span>
-        `;
-        historyContainer.appendChild(li);
-    });
+function toggleTaskComplete(taskId) {
+    const task = state.tasks.find(t => t.id === taskId);
+    if (task) {
+        task.completed = !task.completed;
+        task.completedAt = task.completed ? Date.now() : null;
+        task.updatedAt = Date.now();
+        renderSidebar();
+        renderTasks();
+    }
 }
 
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('pt-BR');
+/* --- LIMPEZA DE CONCLUÍDAS E HISTÓRICO --- */
+function clearCompletedTasks() {
+    let targets = state.tasks.filter(t => t.completed && !t.hiddenFromView);
+
+    if (state.currentContext === 'inbox') {
+        targets = targets.filter(t => !t.projectId);
+    } else if (state.currentContext !== 'all') {
+        const family = getProjectDescendants(state.currentContext);
+        targets = targets.filter(t => family.includes(t.projectId));
+    }
+
+    targets.forEach(t => t.hiddenFromView = true);
+    renderSidebar();
+    renderTasks();
 }
 
-// --- WIDGET POMODORO & SINTETIZADOR DE ÁUDIO NATIVO ---
+function toggleHistoryModal() {
+    const modal = document.getElementById('history-modal');
+    modal.classList.toggle('active');
+
+    if (modal.classList.contains('active')) {
+        const list = document.getElementById('history-tasks-list');
+        list.innerHTML = '';
+
+        const completedTasks = state.tasks.filter(t => t.completed);
+        
+        if (completedTasks.length === 0) {
+            list.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted)">Nenhuma tarefa no histórico dos últimos 7 dias.</div>`;
+            return;
+        }
+
+        completedTasks.forEach(task => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            const dateStr = task.completedAt ? new Date(task.completedAt).toLocaleDateString('pt-BR') : '--';
+            item.innerHTML = `
+                <span>${task.text}</span>
+                <span class="completed-date">✓ Concluída em ${dateStr}</span>
+            `;
+            list.appendChild(item);
+        });
+    }
+}
+
+/* --- EDIÇÃO COMPLETA DE TAREFAS --- */
+function openTaskEditModal(taskId) {
+    const task = state.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    document.getElementById('edit-task-id').value = task.id;
+    document.getElementById('edit-task-text').value = task.text;
+    document.getElementById('edit-task-priority').value = task.priority;
+    document.getElementById('edit-task-due-date').value = task.dueDate || '';
+
+    document.getElementById('task-edit-modal').classList.add('active');
+}
+
+function closeTaskEditModal() {
+    document.getElementById('task-edit-modal').classList.remove('active');
+}
+
+function handleSaveTaskEdit(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-task-id').value;
+    const task = state.tasks.find(t => t.id === id);
+
+    if (task) {
+        task.text = document.getElementById('edit-task-text').value.trim();
+        task.priority = document.getElementById('edit-task-priority').value;
+        task.dueDate = document.getElementById('edit-task-due-date').value || null;
+        task.updatedAt = Date.now();
+        renderTasks();
+    }
+
+    closeTaskEditModal();
+}
+
+/* --- WIDGET POMODORO & SÍNTESE DE ÁUDIO WEB AUDIO API --- */
+const POMO_TIMES = {
+    focus: 25 * 60,
+    short: 5 * 60,
+    long: 15 * 60
+};
+
+function initPomodoroDisplay() {
+    document.getElementById('pomo-sound').value = state.pomodoro.sound || 'beep';
+    updatePomoDisplay();
+}
+
+function setPomoMode(mode) {
+    if (state.pomodoro.isRunning) togglePomodoro();
+    state.pomodoro.mode = mode;
+    state.pomodoro.timeLeft = POMO_TIMES[mode];
+    
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`mode-${mode}`).classList.add('active');
+
+    const titles = { focus: '⏱️ Foco', short: '☕ Pausa Curta', long: '🧘 Pausa Longa' };
+    document.getElementById('pomo-mode-title').innerText = titles[mode];
+
+    updatePomoDisplay();
+}
+
+function updatePomoDisplay() {
+    const mins = Math.floor(state.pomodoro.timeLeft / 60).toString().padStart(2, '0');
+    const secs = (state.pomodoro.timeLeft % 60).toString().padStart(2, '0');
+    document.getElementById('pomo-display').innerText = `${mins}:${secs}`;
+}
+
 function togglePomodoro() {
     const btn = document.getElementById('pomo-start-btn');
-    if (pomodoro.isRunning) {
-        clearInterval(pomodoro.timerId);
-        pomodoro.isRunning = false;
-        btn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    if (state.pomodoro.isRunning) {
+        clearInterval(pomoInterval);
+        state.pomodoro.isRunning = false;
+        btn.innerText = 'Iniciar';
     } else {
-        pomodoro.isRunning = true;
-        btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-        pomodoro.endTime = Date.now() + (pomodoro.timeLeft * 1000);
-        
-        pomodoro.timerId = setInterval(() => {
-            const secondsLeft = Math.round((pomodoro.endTime - Date.now()) / 1000);
-            if (secondsLeft <= 0) {
-                clearInterval(pomodoro.timerId);
-                pomodoro.timeLeft = 0;
-                updatePomoDisplay();
-                triggerPomoAudio();
-                alert('Sessão do Pomodoro encerrada!');
-                resetPomodoro();
-            } else {
-                pomodoro.timeLeft = secondsLeft;
+        state.pomodoro.isRunning = true;
+        state.pomodoro.lastTick = Date.now();
+        btn.innerText = 'Pausar';
+
+        pomoInterval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = Math.floor((now - state.pomodoro.lastTick) / 1000);
+
+            if (elapsed >= 1) {
+                state.pomodoro.timeLeft -= elapsed;
+                state.pomodoro.lastTick = now;
+
+                if (state.pomodoro.timeLeft <= 0) {
+                    state.pomodoro.timeLeft = 0;
+                    clearInterval(pomoInterval);
+                    state.pomodoro.isRunning = false;
+                    btn.innerText = 'Iniciar';
+                    playPomodoroSound();
+                    alert('Sessão do Pomodoro Finalizada!');
+                }
                 updatePomoDisplay();
             }
         }, 500);
@@ -478,47 +616,52 @@ function togglePomodoro() {
 }
 
 function resetPomodoro() {
-    clearInterval(pomodoro.timerId);
-    pomodoro.isRunning = false;
-    pomodoro.timeLeft = 1500;
-    document.getElementById('pomo-start-btn').innerHTML = '<i class="fa-solid fa-play"></i>';
+    if (state.pomodoro.isRunning) togglePomodoro();
+    state.pomodoro.timeLeft = POMO_TIMES[state.pomodoro.mode];
     updatePomoDisplay();
 }
 
-function updatePomoDisplay() {
-    const minutes = Math.floor(pomodoro.timeLeft / 60);
-    const seconds = pomodoro.timeLeft % 60;
-    document.getElementById('pomo-timer').innerText = 
-        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+function savePomoSettings() {
+    state.pomodoro.sound = document.getElementById('pomo-sound').value;
+    saveState();
 }
 
-// Web Audio API Sintetizado
-function triggerPomoAudio() {
-    if (pomodoro.sound === 'mute') return;
+/* Sintetizador de Som Nativo (Web Audio API) */
+function playPomodoroSound() {
+    const soundType = state.pomodoro.sound;
+    if (soundType === 'mute') return;
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    if (soundType === 'beep') {
+        playTone(440, 0.5, 'sine');
+    } else if (soundType === 'double-alarm') {
+        playTone(880, 0.2, 'square');
+        setTimeout(() => playTone(880, 0.4, 'square'), 300);
+    } else if (soundType === 'zen') {
+        playTone(220, 1.5, 'triangle');
+    }
+}
 
-    if (pomodoro.sound === 'beep') {
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+function playTone(freq, duration, type) {
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
-    } else if (pomodoro.sound === 'alarm') {
-        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.5);
-    } else if (pomodoro.sound === 'zen') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(432, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 1.5);
+        osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {
+        console.error("Erro ao emitir áudio:", e);
     }
 }
