@@ -32,14 +32,15 @@ Lista de tarefas simples e dinâmica
   - 🟡 **Amarelo:** Média Prioridade
   - 🔴 **Vermelho:** Alta Prioridade
 
-### 3. Árvore de Projetos, Contadores e Interatividade na Sidebar
+### 3. Árvore de Projetos, Personalização de Cores, Contadores e Interatividade na Sidebar
+- **Personalização de Cores:** Seleção livre de cor customizada via modal com `<input type="color">` tanto no momento de criação quanto na edição de projetos e subprojetos.
 - **Árvore Recolhível (Accordion):** Opção de alternar entre expandir e recolher (`▸` / `▾`) subprojetos na sidebar.
 - **Contadores de Tarefas:** Exibir o número de tarefas pendentes ao lado da *Caixa de Entrada*, da opção *Todas as Tarefas* e de cada projeto/subprojeto na barra lateral.
 - **Arrastar e Soltar (Drag and Drop):** Suporte nativo para reordenar dinamicamente tanto as tarefas na lista principal quanto a estrutura dos projetos/subprojetos na sidebar.
 - **Hierarquia:** Suporte para até 3 níveis de profundidade (Projeto Principal > Subprojeto > Sub-subprojeto).
 - **Roll-up de Visualização:** Selecionar um projeto pai lista as tarefas dele e de todos os subprojetos descendentes.
 - **Edição & Ações na Sidebar:**
-  - `✏️` ou **Duplo clique no nome**: Renomear projeto ou subprojeto.
+  - `✏️` ou **Duplo clique no nome**: Editar nome e cor do projeto ou subprojeto via modal.
   - `+`: Criar subprojeto (respeitando o limite máximo de 3 níveis).
   - `✕`: Encerrar/excluir projeto, subprojetos vinculados e suas tarefas em cascata (com confirmação).
 
