@@ -14,12 +14,16 @@ Lista de tarefas simples e dinâmica
 
 ## 🛠️ Regras de Negócio OBRIGATÓRIAS (Não remover nas atualizações)
 
-### 1. Gestão de Tarefas
+### 1. Gestão de Tarefas, Prazos e Alertas
 - **Visão "Todas as Tarefas" (Geral):** Contexto global na barra lateral para visualizar todas as tarefas ativas do sistema consolidadas em um único lugar, independentemente de estarem na Caixa de Entrada ou vinculadas a projetos.
-- **Histórico NATIVO (7 dias):** Tarefas concluídas continuam visíveis no projeto por até 7 dias (com texto tachado e badge `✓ Concluída em DD/MM/AAAA`). São excluídas automaticamente após esse prazo via `cleanupOldCompletedTasks()`.
-- **Edição Completa de Tarefas:** Duplo clique (ou botão dedicado) permite editar tanto o **texto** quanto o **nível de prioridade** (Baixa, Média, Alta) de qualquer tarefa ativa.
+- **Data Limite de Entrega (Due Dates):** Campo opcional ao criar/editar uma tarefa para definir a data limite de conclusão.
+- **Alertas de Vencimento e Estagnação:**
+  - **Tarefa Vencida:** Dispara alerta visual no card (ex: `🚨 Vencida em DD/MM/AAAA`) e notificação no sistema quando a data limite for atingida ou ultrapassada.
+  - **Tarefa Estagnada (15 dias sem prazo):** Se uma tarefa não possuir data limite configurada e ficar mais de 15 dias sem edição/atualização (`updatedAt`), ela receberá o mesmo alerta de atenção que as tarefas vencidas (`⚠️ Estagnada há Xd`).
+- **Limpeza de Concluídas Preservando Histórico (7 dias):** Ação de "Limpar Concluídas" oculta/remove as tarefas finalizadas da visualização do contexto atual (Caixa de Entrada, Projeto ou Geral), mas **mantém os dados salvos** no sistema para alimentar o histórico compacto dos últimos 7 dias. A remoção definitiva do `localStorage` ocorre exclusivamente após 7 dias via `cleanupOldCompletedTasks()`.
+- **Histórico NATIVO (7 dias):** Tarefas concluídas alimentam o painel de histórico por até 7 dias (exibindo `✓ Concluída em DD/MM/AAAA`). São excluídas do armazenamento automaticamente após esse prazo.
+- **Edição Completa de Tarefas:** Duplo clique (ou botão dedicado) permite editar o **texto**, a **prioridade** (Baixa, Média, Alta) e a **data de vencimento** de qualquer tarefa ativa.
 - **Ordenação por Prioridade:** As tarefas ativas devem sempre ser exibidas na ordem de prioridade: **Alta ➔ Média ➔ Baixa**.
-- **Alerta de Estagnação:** Se uma tarefa ativa ficar 15 dias sem edição/atualização (`updatedAt`), exibir o selo `⚠️ Xd estagnada`.
 
 ### 2. Identificação Visual de Cores (Lados Esquerdo e Direito)
 - **Lado Esquerdo (Cor do Projeto):** Borda ou indicador à esquerda do card da tarefa com a cor definida para o projeto correspondente.
@@ -45,10 +49,9 @@ Lista de tarefas simples e dinâmica
 
 ---
 
-## 🚀 Próximas Melhorias / Ajustes Pendentes
-1. [ ] **Ajuste de Cores Duplas (Esquerda/Direita):** Aplicar borda esquerda com a cor do projeto e borda direita indicando a prioridade (Verde/Amarelo/Vermelho), ordenando da prioridade Alta para a Baixa.
-2. [ ] **Aba "Todas as Tarefas":** Criar a opção no topo da sidebar para ver todo o inventário de tarefas do sistema.
-3. [ ] **Contadores na Sidebar:** Injetar badges numéricas ao lado do nome da Caixa de Entrada e de cada projeto.
-4. [ ] **Accordion na Árvore:** Adicionar os seletores de expansão/recolhimento dos subprojetos.
-5. [ ] **Drag and Drop Geral:** Reimplementar a funcionalidade de arrastar tarefas e projetos.
-6. [ ] **Painel Global de Concluídas (7 dias):** Manter o widget compacto na sidebar mostrando a contagem dos últimos 7 dias.
+## 🚀 Próximas Melhorias Futuras
+1. [ ] **Barra de Pesquisa e Filtros Rápidos:** Buscar palavras-chave e filtrar por prioridade em tempo real.
+2. [ ] **Backup em JSON (Exportar/Importar):** Permitir o salvamento de uma cópia dos dados locais para arquivo externo e recuperação.
+3. [ ] **Alternador de Tema (Dark / Light):** Suporte para alternar entre modo escuro e claro no cabeçalho.
+4. [ ] **Atalhos de Teclado:** Ações rápidas para navegação, criação de tarefas e controle do Pomodoro.
+5. [ ] **Dashboard de Produtividade:** Métricas completas com contagem de sessões de Pomodoro, gráficos de tarefas concluídas e relatórios por projeto.
