@@ -1,416 +1,524 @@
-// --- ESTADO & PERSISTÊNCIA ---
-let state = JSON.parse(localStorage.getItem('mytasks_data')) || {
-    projects: [],
+/**
+ * MyTasks - Regras de Negócio & Persistência
+ */
+
+let state = {
     tasks: [],
-    collapsedProjects: [], // IDs dos projetos recolhidos no accordion
-    activeContext: { type: 'inbox', projectId: null },
-    audioSettings: { focus: 'double-alarm', break: 'beep' }
+    projects: [],
+    currentView: 'all', // 'all', 'inbox', ou ID do projeto
+    editingTaskId: null
 };
 
-if (!state.collapsedProjects) state.collapsedProjects = [];
+// Pomodoro State
+let pomodoro = {
+    timeLeft: 1500, // 25 min
+    isRunning: false,
+    timerId: null,
+    endTime: null,
+    sound: 'beep'
+};
 
-let targetParentProjectId = null;
-let editingTaskId = null;
-const MAX_DEPTH = 3;
+// --- INICIALIZAÇÃO ---
+document.addEventListener('DOMContentLoaded', () => {
+    loadLocalStorage();
+    cleanupOldCompletedTasks();
+    setupEventListeners();
+    render();
+});
 
-// PESOS DE PRIORIDADE PARA ORDENAÇÃO
-const PRIORITY_WEIGHTS = { high: 3, medium: 2, low: 1 };
+function loadLocalStorage() {
+    const savedState = localStorage.getItem('mytasks_state');
+    if (savedState) {
+        state = JSON.parse(savedState);
+    } else {
+        // Estrutura Inicial Padrão
+        state.projects = [
+            { id: 'p1', name: 'Trabalho', color: '#f75a68', parentId: null, expanded: true },
+            { id: 'p2', name: 'Estudos', color: '#04d361', parentId: null, expanded: true }
+        ];
+        saveLocalStorage();
+    }
+}
 
+function saveLocalStorage() {
+    localStorage.setItem('mytasks_state', JSON.stringify(state));
+}
+
+// Expurgar do localStorage concluídas a mais de 7 dias
 function cleanupOldCompletedTasks() {
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
     const now = Date.now();
-    state.tasks = state.tasks.filter(t => !t.completed || !t.completedAt || (now - t.completedAt) < SEVEN_DAYS_MS);
-}
-
-// --- DOM ---
-const projectsTreeEl = document.getElementById('projects-tree');
-const tasksListEl = document.getElementById('tasks-list');
-const historyListEl = document.getElementById('history-list');
-const historyCountEl = document.getElementById('history-count');
-const currentContextTitle = document.getElementById('current-context-title');
-const countInboxEl = document.getElementById('count-inbox');
-const countAllEl = document.getElementById('count-all');
-
-const taskForm = document.getElementById('task-form');
-const taskInput = document.getElementById('task-input');
-const taskPriority = document.getElementById('task-priority');
-
-// Modais
-const btnNewProject = document.getElementById('btn-new-project');
-const projectModal = document.getElementById('project-modal');
-const modalTitle = document.getElementById('modal-title');
-const projectNameInput = document.getElementById('project-name-input');
-const projectColorInput = document.getElementById('project-color-input');
-const btnSaveProject = document.getElementById('btn-save-project');
-const btnCancelProject = document.getElementById('btn-cancel-project');
-
-const editTaskModal = document.getElementById('edit-task-modal');
-const editTaskTextInput = document.getElementById('edit-task-text-input');
-const editTaskPriorityInput = document.getElementById('edit-task-priority-input');
-const btnSaveTaskEdit = document.getElementById('btn-save-task-edit');
-const btnCancelTaskEdit = document.getElementById('btn-cancel-task-edit');
-
-// Pomodoro
-const timerDisplay = document.getElementById('timer');
-const startBtn = document.getElementById('start-btn');
-const pauseBtn = document.getElementById('pause-btn');
-const resetBtn = document.getElementById('reset-btn');
-
-// --- ÁUDIO SINTETIZADO ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-    if (type === 'silent') return;
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    const now = audioCtx.currentTime;
-
-    if (type === 'beep') {
-        osc.frequency.setValueAtTime(880, now);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now); osc.stop(now + 0.3);
-    } else if (type === 'double-alarm') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(1046.50, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-        osc.start(now); osc.stop(now + 0.35);
-    } else if (type === 'zen') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(300, now);
-        gain.gain.setValueAtTime(0.5, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-        osc.start(now); osc.stop(now + 1.5);
-    }
-}
-
-// --- TIMER POMODORO ---
-let timerInterval = null, timeLeft = 25 * 60, isFocusMode = true, targetTime = null;
-
-function updateTimerDisplay() {
-    const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
-    timerDisplay.innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-startBtn.onclick = () => {
-    if (timerInterval) return;
-    targetTime = Date.now() + timeLeft * 1000;
-    startBtn.disabled = true; pauseBtn.disabled = false;
-
-    timerInterval = setInterval(() => {
-        timeLeft = Math.max(0, Math.round((targetTime - Date.now()) / 1000));
-        updateTimerDisplay();
-        if (timeLeft <= 0) {
-            clearInterval(timerInterval); timerInterval = null;
-            playSound(isFocusMode ? document.getElementById('sound-focus').value : document.getElementById('sound-break').value);
-            isFocusMode = !isFocusMode;
-            timeLeft = isFocusMode ? 25 * 60 : 5 * 60;
-            updateTimerDisplay();
-            startBtn.disabled = false; pauseBtn.disabled = true;
+    state.tasks = state.tasks.filter(task => {
+        if (task.completed && task.completedAt) {
+            return (now - new Date(task.completedAt).getTime()) < SEVEN_DAYS_MS;
         }
-    }, 250);
-};
+        return true;
+    });
+    saveLocalStorage();
+}
 
-pauseBtn.onclick = () => { clearInterval(timerInterval); timerInterval = null; startBtn.disabled = false; pauseBtn.disabled = true; };
-resetBtn.onclick = () => { clearInterval(timerInterval); timerInterval = null; isFocusMode = true; timeLeft = 25 * 60; updateTimerDisplay(); startBtn.disabled = false; pauseBtn.disabled = true; };
+// --- EVENT LISTENERS ---
+function setupEventListeners() {
+    // Navegação Sidebar
+    document.getElementById('nav-all-tasks').addEventListener('click', () => switchView('all'));
+    document.getElementById('nav-inbox').addEventListener('click', () => switchView('inbox'));
+    document.getElementById('btn-add-project').addEventListener('click', createProject);
 
-// --- SALVAR & RENDERIZAR ---
-function saveData() {
-    localStorage.setItem('mytasks_data', JSON.stringify(state));
+    // Formulário de Tarefa
+    document.getElementById('add-task-form').addEventListener('submit', handleAddTask);
+    
+    // Limpar Concluídas (Ocultar da lista mantendo no histórico de 7 dias)
+    document.getElementById('btn-clear-completed').addEventListener('click', handleClearCompleted);
+
+    // Modal de Edição
+    document.getElementById('btn-cancel-edit').addEventListener('click', closeModal);
+    document.getElementById('btn-save-edit').addEventListener('click', handleSaveEdit);
+
+    // Pomodoro
+    document.getElementById('pomo-start-btn').addEventListener('click', togglePomodoro);
+    document.getElementById('pomo-reset-btn').addEventListener('click', resetPomodoro);
+    document.getElementById('pomo-sound-select').addEventListener('change', (e) => pomodoro.sound = e.target.value);
+}
+
+function switchView(view) {
+    state.currentView = view;
     render();
 }
 
-function render() {
-    cleanupOldCompletedTasks();
-    updateCounts();
-    renderSidebar();
-    renderTasks();
-    renderGlobalHistory();
-}
-
-// --- CONTADORES ---
-function updateCounts() {
-    const activeTasks = state.tasks.filter(t => !t.completed);
-    countInboxEl.innerText = activeTasks.filter(t => !t.projectId).length;
-    countAllEl.innerText = activeTasks.length;
-}
-
-function getProjectTaskCount(projectId) {
-    const allIds = getAllSubProjectIds(projectId);
-    return state.tasks.filter(t => !t.completed && allIds.includes(t.projectId)).length;
-}
-
-// --- SIDEBAR & ACCORDION ---
-function renderSidebar() {
-    projectsTreeEl.innerHTML = '';
-    renderProjectTree(null, projectsTreeEl, 1);
-}
-
-function toggleCollapse(projectId, e) {
-    e.stopPropagation();
-    const idx = state.collapsedProjects.indexOf(projectId);
-    if (idx > -1) state.collapsedProjects.splice(idx, 1);
-    else state.collapsedProjects.push(projectId);
-    saveData();
-}
-
-function renderProjectTree(parentId, container, depth) {
-    const children = state.projects.filter(p => p.parentId === parentId);
-
-    children.forEach(proj => {
-        const itemContainer = document.createElement('div');
-        const hasChildren = state.projects.some(p => p.parentId === proj.id);
-        const isCollapsed = state.collapsedProjects.includes(proj.id);
-        const isCurrentActive = state.activeContext.type === 'project' && state.activeContext.projectId === proj.id;
-        const taskCount = getProjectTaskCount(proj.id);
-
-        const row = document.createElement('div');
-        row.className = `project-row ${isCurrentActive ? 'active' : ''}`;
-        row.style.paddingLeft = `${8 + (depth - 1) * 10}px`;
-        row.draggable = true;
-        row.dataset.id = proj.id;
-
-        row.onclick = () => setContext('project', proj.id);
-
-        // Events Drag & Drop Projeto
-        row.ondragstart = (e) => { e.dataTransfer.setData('text/plain', proj.id); row.classList.add('dragging'); };
-        row.ondragend = () => row.classList.remove('dragging');
-        row.ondragover = (e) => e.preventDefault();
-        row.ondrop = (e) => {
-            e.preventDefault();
-            const draggedId = e.dataTransfer.getData('text/plain');
-            if (draggedId !== proj.id) reorderProjects(draggedId, proj.id);
-        };
-
-        const toggleIcon = hasChildren ? (isCollapsed ? '▸' : '▾') : '•';
-
-        row.innerHTML = `
-            <button class="toggle-btn" onclick="toggleCollapse('${proj.id}', event)">${toggleIcon}</button>
-            <span class="project-bullet" style="background-color: ${proj.color}"></span>
-            <span class="project-name" ondblclick="event.stopPropagation(); editProject('${proj.id}')">${proj.name}</span>
-            <span class="badge-count">${taskCount}</span>
-            <div class="project-actions">
-                <button class="btn-action" onclick="event.stopPropagation(); editProject('${proj.id}')">✏️</button>
-                ${depth < MAX_DEPTH ? `<button class="btn-action" onclick="event.stopPropagation(); openNewProjectModal('${proj.id}')">+</button>` : ''}
-                <button class="btn-action delete" onclick="event.stopPropagation(); closeProject('${proj.id}')">✕</button>
-            </div>
-        `;
-
-        itemContainer.appendChild(row);
-        container.appendChild(itemContainer);
-
-        if (hasChildren && !isCollapsed) {
-            renderProjectTree(proj.id, itemContainer, depth + 1);
-        }
-    });
-}
-
-function reorderProjects(draggedId, targetId) {
-    const draggedIdx = state.projects.findIndex(p => p.id === draggedId);
-    const targetIdx = state.projects.findIndex(p => p.id === targetId);
-    if (draggedIdx > -1 && targetIdx > -1) {
-        const [moved] = state.projects.splice(draggedIdx, 1);
-        moved.parentId = state.projects[targetIdx]?.parentId || null;
-        state.projects.splice(targetIdx, 0, moved);
-        saveData();
-    }
-}
-
-// --- CONTEXTO DE NAVEGAÇÃO ---
-function setContext(type, projectId = null) {
-    state.activeContext = { type, projectId };
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-
-    if (type === 'inbox') {
-        currentContextTitle.innerText = "📥 Caixa de Entrada";
-        document.querySelector('[data-type="inbox"]').classList.add('active');
-    } else if (type === 'all') {
-        currentContextTitle.innerText = "🌐 Todas as Tarefas (Geral)";
-        document.querySelector('[data-type="all"]').classList.add('active');
-    } else {
-        currentContextTitle.innerText = getBreadcrumbPath(projectId);
-    }
-    saveData();
-}
-
-function getBreadcrumbPath(projectId) {
-    const path = [];
-    let curr = state.projects.find(p => p.id === projectId);
-    while (curr) { path.unshift(curr.name); curr = state.projects.find(p => p.id === curr.parentId); }
-    return path.join(' > ');
-}
-
-// --- RENDERIZAÇÃO DE TAREFAS & ORDENAÇÃO ---
-function renderTasks() {
-    tasksListEl.innerHTML = '';
-    const now = Date.now();
-    const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-    let filteredTasks = [];
-
-    if (state.activeContext.type === 'inbox') {
-        filteredTasks = state.tasks.filter(t => !t.projectId);
-    } else if (state.activeContext.type === 'all') {
-        filteredTasks = [...state.tasks];
-    } else if (state.activeContext.type === 'project') {
-        const targetProjectIds = getAllSubProjectIds(state.activeContext.projectId);
-        filteredTasks = state.tasks.filter(t => targetProjectIds.includes(t.projectId));
-    }
-
-    if (filteredTasks.length === 0) {
-        tasksListEl.innerHTML = `<li style="color: #777; font-style: italic; padding: 10px;">Nenhuma tarefa encontrada.</li>`;
-        return;
-    }
-
-    // ORDENAÇÃO: Concluídas ao final, ativas ordenadas por PRIORIDADE ALTA -> BAIXA
-    filteredTasks.sort((a, b) => {
-        if (a.completed !== b.completed) return a.completed ? 1 : -1;
-        return PRIORITY_WEIGHTS[b.priority] - PRIORITY_WEIGHTS[a.priority];
-    });
-
-    filteredTasks.forEach(task => {
-        const li = document.createElement('li');
-        li.className = `task-item prio-${task.priority} ${task.completed ? 'completed' : ''}`;
-        li.draggable = true;
-
-        // Borda Esquerda: Cor do Projeto
-        if (task.projectId) {
-            const proj = state.projects.find(p => p.id === task.projectId);
-            if (proj) li.style.borderLeftColor = proj.color;
-        }
-
-        // Drag & Drop Tarefas
-        li.ondragstart = () => { li.classList.add('dragging'); window.draggedTaskId = task.id; };
-        li.ondragend = () => li.classList.remove('dragging');
-        li.ondragover = (e) => e.preventDefault();
-        li.ondrop = (e) => {
-            e.preventDefault();
-            reorderTasks(window.draggedTaskId, task.id);
-        };
-
-        const daysInactive = Math.floor((now - task.updatedAt) / (1000 * 60 * 60 * 24));
-        const isStale = !task.completed && ((now - task.updatedAt) >= FIFTEEN_DAYS_MS);
-
-        let completedBadge = task.completed && task.completedAt 
-            ? `<span class="completed-date">✓ Concluída em ${new Date(task.completedAt).toLocaleDateString()}</span>` : '';
-
-        li.innerHTML = `
-            <div class="task-content">
-                <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
-                <span class="task-text" ondblclick="openEditTaskModal('${task.id}')">${task.text}</span>
-                ${isStale ? `<span class="stale-badge">⚠️ ${daysInactive}d estagnada</span>` : ''}
-            </div>
-            ${completedBadge}
-            <div class="task-actions-btn">
-                <button class="btn-action" onclick="openEditTaskModal('${task.id}')">✏️</button>
-                <button class="btn-delete" onclick="deleteTask('${task.id}')">✕</button>
-            </div>
-        `;
-        tasksListEl.appendChild(li);
-    });
-}
-
-function reorderTasks(draggedId, targetId) {
-    const fromIdx = state.tasks.findIndex(t => t.id === draggedId);
-    const toIdx = state.tasks.findIndex(t => t.id === targetId);
-    if (fromIdx > -1 && toIdx > -1) {
-        const [moved] = state.tasks.splice(fromIdx, 1);
-        state.tasks.splice(toIdx, 0, moved);
-        saveData();
-    }
-}
-
-// --- HISTÓRICO GLOBAL (ÚLTIMOS 7 DIAS) ---
-function renderGlobalHistory() {
-    historyListEl.innerHTML = '';
-    const completed = state.tasks.filter(t => t.completed && t.completedAt).sort((a, b) => b.completedAt - a.completedAt);
-    historyCountEl.innerText = completed.length;
-
-    completed.forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'history-item';
-        li.innerHTML = `<span class="history-text" title="${t.text}">${t.text}</span><span>${new Date(t.completedAt).toLocaleDateString(undefined, {day:'2-digit', month:'2-digit'})}</span>`;
-        historyListEl.appendChild(li);
-    });
-}
-
-// --- ACOES DE TAREFA E MODAIS ---
-taskForm.onsubmit = (e) => {
+// --- GESTÃO DE TAREFAS ---
+function handleAddTask(e) {
     e.preventDefault();
-    const text = taskInput.value.trim();
-    if (!text) return;
-    const now = Date.now();
-    state.tasks.unshift({
-        id: 'task_' + now,
-        projectId: state.activeContext.type === 'project' ? state.activeContext.projectId : null,
-        text, priority: taskPriority.value, completed: false, createdAt: now, updatedAt: now, completedAt: null
+    const textInput = document.getElementById('task-input-text');
+    const dateInput = document.getElementById('task-input-date');
+    const priorityInput = document.getElementById('task-input-priority');
+
+    const newTask = {
+        id: 't_' + Date.now(),
+        text: textInput.value.trim(),
+        projectId: (state.currentView === 'all') ? 'inbox' : state.currentView,
+        priority: priorityInput.value, // 'high', 'medium', 'low'
+        dueDate: dateInput.value || null,
+        completed: false,
+        hiddenFromList: false, // flag para a ação "Limpar Concluídas"
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        completedAt: null
+    };
+
+    state.tasks.push(newTask);
+    saveLocalStorage();
+    textInput.value = '';
+    dateInput.value = '';
+    render();
+}
+
+function toggleTaskComplete(taskId) {
+    const task = state.tasks.find(t => t.id === taskId);
+    if (task) {
+        task.completed = !task.completed;
+        task.completedAt = task.completed ? new Date().toISOString() : null;
+        task.updatedAt = new Date().toISOString();
+        saveLocalStorage();
+        render();
+    }
+}
+
+function deleteTask(taskId) {
+    if (confirm('Deseja excluir esta tarefa definitivamente?')) {
+        state.tasks = state.tasks.filter(t => t.id !== taskId);
+        saveLocalStorage();
+        render();
+    }
+}
+
+// Limpar Concluídas: oculta da visualização sem apagar do histórico de 7 dias
+function handleClearCompleted() {
+    const activeViewTasks = getTasksForCurrentView();
+    activeViewTasks.forEach(t => {
+        if (t.completed) {
+            t.hiddenFromList = true;
+        }
     });
-    taskInput.value = '';
-    saveData();
-};
-
-function toggleTask(id) {
-    const t = state.tasks.find(x => x.id === id);
-    if (t) { t.completed = !t.completed; t.updatedAt = Date.now(); t.completedAt = t.completed ? Date.now() : null; saveData(); }
+    saveLocalStorage();
+    render();
 }
 
-function openEditTaskModal(id) {
-    const t = state.tasks.find(x => x.id === id);
-    if (!t) return;
-    editingTaskId = id; editTaskTextInput.value = t.text; editTaskPriorityInput.value = t.priority;
-    editTaskModal.classList.remove('hidden');
+// --- EDICÃO DE TAREFA ---
+function openEditModal(taskId) {
+    const task = state.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    state.editingTaskId = taskId;
+    document.getElementById('edit-task-text').value = task.text;
+    document.getElementById('edit-task-date').value = task.dueDate || '';
+    document.getElementById('edit-task-priority').value = task.priority;
+    
+    document.getElementById('modal-edit-task').classList.add('active');
 }
 
-btnCancelTaskEdit.onclick = () => editTaskModal.classList.add('hidden');
-btnSaveTaskEdit.onclick = () => {
-    const t = state.tasks.find(x => x.id === editingTaskId);
-    if (t && editTaskTextInput.value.trim()) {
-        t.text = editTaskTextInput.value.trim(); t.priority = editTaskPriorityInput.value; t.updatedAt = Date.now();
-        editTaskModal.classList.add('hidden'); saveData();
+function closeModal() {
+    document.getElementById('modal-edit-task').classList.remove('active');
+    state.editingTaskId = null;
+}
+
+function handleSaveEdit() {
+    const task = state.tasks.find(t => t.id === state.editingTaskId);
+    if (task) {
+        task.text = document.getElementById('edit-task-text').value.trim();
+        task.dueDate = document.getElementById('edit-task-date').value || null;
+        task.priority = document.getElementById('edit-task-priority').value;
+        task.updatedAt = new Date().toISOString();
+        saveLocalStorage();
+        render();
     }
-};
-
-function deleteTask(id) { if (confirm("Excluir esta tarefa permanentemente?")) { state.tasks = state.tasks.filter(t => t.id !== id); saveData(); } }
-
-// PROJETOS AUXILIARES
-btnNewProject.onclick = () => openNewProjectModal(null);
-function openNewProjectModal(parentId) {
-    targetParentProjectId = parentId; projectNameInput.value = ''; projectModal.classList.remove('hidden');
+    closeModal();
 }
-btnCancelProject.onclick = () => projectModal.classList.add('hidden');
-btnSaveProject.onclick = () => {
-    if (projectNameInput.value.trim()) {
-        state.projects.push({ id: 'proj_' + Date.now(), name: projectNameInput.value.trim(), color: projectColorInput.value, parentId: targetParentProjectId });
-        projectModal.classList.add('hidden'); saveData();
+
+// --- GESTÃO DE PROJETOS & HIERARQUIA ---
+function createProject(parentId = null) {
+    const name = prompt('Nome do Projeto:');
+    if (!name) return;
+
+    // Verificar Limite de 3 Níveis
+    if (parentId) {
+        const depth = getProjectDepth(parentId);
+        if (depth >= 3) {
+            alert('Atingido o limite máximo de 3 níveis de profundidade!');
+            return;
+        }
     }
-};
 
-function editProject(id) {
-    const p = state.projects.find(x => x.id === id);
-    const n = prompt("Novo nome:", p?.name);
-    if (n && n.trim()) { p.name = n.trim(); saveData(); }
+    const colors = ['#f75a68', '#fba94c', '#04d361', '#8257e5', '#12a454', '#00b4d8'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const newProject = {
+        id: 'p_' + Date.now(),
+        name: name,
+        color: randomColor,
+        parentId: typeof parentId === 'string' ? parentId : null,
+        expanded: true
+    };
+
+    state.projects.push(newProject);
+    saveLocalStorage();
+    render();
 }
 
-function closeProject(id) {
-    const all = getAllSubProjectIds(id);
-    if (confirm("Encerrar este projeto e subprojetos vinculados?")) {
-        state.projects = state.projects.filter(p => !all.includes(p.id));
-        state.tasks = state.tasks.filter(t => !all.includes(t.projectId));
-        setContext('inbox');
+function getProjectDepth(projectId) {
+    let depth = 1;
+    let curr = state.projects.find(p => p.id === projectId);
+    while (curr && curr.parentId) {
+        depth++;
+        curr = state.projects.find(p => p.id === curr.parentId);
+    }
+    return depth;
+}
+
+function deleteProject(projectId) {
+    if (!confirm('Excluir este projeto, seus subprojetos e todas as tarefas vinculadas em cascata?')) return;
+
+    // Coletar IDs em cascata
+    const idsToDelete = [projectId];
+    function collectSubIds(pId) {
+        const subs = state.projects.filter(p => p.parentId === pId);
+        subs.forEach(s => {
+            idsToDelete.push(s.id);
+            collectSubIds(s.id);
+        });
+    }
+    collectSubIds(projectId);
+
+    state.projects = state.projects.filter(p => !idsToDelete.includes(p.id));
+    state.tasks = state.tasks.filter(t => !idsToDelete.includes(t.projectId));
+
+    if (idsToDelete.includes(state.currentView)) {
+        state.currentView = 'all';
+    }
+
+    saveLocalStorage();
+    render();
+}
+
+function toggleAccordion(projectId, e) {
+    e.stopPropagation();
+    const proj = state.projects.find(p => p.id === projectId);
+    if (proj) {
+        proj.expanded = !proj.expanded;
+        saveLocalStorage();
+        render();
     }
 }
 
-function getAllSubProjectIds(id) {
-    let ids = [id];
-    state.projects.filter(p => p.parentId === id).forEach(c => ids = ids.concat(getAllSubProjectIds(c.id)));
+// Obter IDs de projetos para Roll-up
+function getProjectAndSubprojectIds(parentId) {
+    let ids = [parentId];
+    const subs = state.projects.filter(p => p.parentId === parentId);
+    subs.forEach(s => {
+        ids = ids.concat(getProjectAndSubprojectIds(s.id));
+    });
     return ids;
 }
 
-// BOTÕES DE NAVEGAÇÃO FIXOS
-document.querySelector('[data-type="inbox"]').onclick = () => setContext('inbox');
-document.querySelector('[data-type="all"]').onclick = () => setContext('all');
+// --- REGRAS DE RENDERIZAÇÃO & ORDENAÇÃO ---
+function getTasksForCurrentView() {
+    if (state.currentView === 'all') {
+        return state.tasks;
+    } else if (state.currentView === 'inbox') {
+        return state.tasks.filter(t => t.projectId === 'inbox');
+    } else {
+        const projectIds = getProjectAndSubprojectIds(state.currentView);
+        return state.tasks.filter(t => projectIds.includes(t.projectId));
+    }
+}
 
-// Renderização inicial
-render();
+function render() {
+    renderSidebar();
+    renderTasks();
+    renderHistory();
+    updateBadges();
+}
+
+function updateBadges() {
+    const activeTasks = state.tasks.filter(t => !t.completed);
+    document.getElementById('badge-all').innerText = activeTasks.length;
+    document.getElementById('badge-inbox').innerText = activeTasks.filter(t => t.projectId === 'inbox').length;
+}
+
+function renderSidebar() {
+    const container = document.getElementById('projects-tree');
+    container.innerHTML = '';
+
+    // Renderizar projetos de nível raiz (parentId = null)
+    const rootProjects = state.projects.filter(p => !p.parentId);
+    rootProjects.forEach(proj => {
+        container.appendChild(createProjectDOM(proj));
+    });
+
+    // Atualizar classe ativa nas navs padrão
+    document.getElementById('nav-all-tasks').classList.toggle('active', state.currentView === 'all');
+    document.getElementById('nav-inbox').classList.toggle('active', state.currentView === 'inbox');
+}
+
+function createProjectDOM(project) {
+    const li = document.createElement('li');
+    li.className = 'project-item';
+
+    const subprojects = state.projects.filter(p => p.parentId === project.id);
+    const hasSub = subprojects.length > 0;
+    
+    // Contagem de tarefas pendentes no projeto + subprojetos
+    const projectIds = getProjectAndSubprojectIds(project.id);
+    const pendingCount = state.tasks.filter(t => !t.completed && projectIds.includes(t.projectId)).length;
+
+    const node = document.createElement('div');
+    node.className = `project-node ${state.currentView === project.id ? 'active' : ''}`;
+    node.onclick = () => switchView(project.id);
+    node.ondblclick = () => {
+        const newName = prompt('Renomear Projeto:', project.name);
+        if (newName) { project.name = newName; saveLocalStorage(); render(); }
+    };
+
+    node.innerHTML = `
+        ${hasSub ? `<button class="accordion-toggle">${project.expanded ? '▾' : '▸'}</button>` : '<span style="width:14px"></span>'}
+        <span class="project-color-dot" style="background-color: ${project.color}"></span>
+        <span class="project-title">${project.name}</span>
+        <span class="badge">${pendingCount}</span>
+        <div class="project-actions">
+            <button title="Subprojeto" onclick="event.stopPropagation(); createProject('${project.id}')"><i class="fa-solid fa-plus"></i></button>
+            <button title="Excluir" onclick="event.stopPropagation(); deleteProject('${project.id}')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    `;
+
+    if (hasSub) {
+        const toggleBtn = node.querySelector('.accordion-toggle');
+        toggleBtn.onclick = (e) => toggleAccordion(project.id, e);
+    }
+
+    li.appendChild(node);
+
+    if (hasSub) {
+        const ulSub = document.createElement('ul');
+        ulSub.className = `subprojects-list ${project.expanded ? 'expanded' : ''}`;
+        subprojects.forEach(sub => {
+            ulSub.appendChild(createProjectDOM(sub));
+        });
+        li.appendChild(ulSub);
+    }
+
+    return li;
+}
+
+function renderTasks() {
+    const listContainer = document.getElementById('tasks-list');
+    listContainer.innerHTML = '';
+
+    // Atualizar Título da Visão
+    const titleElem = document.getElementById('current-view-title');
+    if (state.currentView === 'all') titleElem.innerText = 'Todas as Tarefas';
+    else if (state.currentView === 'inbox') titleElem.innerText = 'Caixa de Entrada';
+    else {
+        const proj = state.projects.find(p => p.id === state.currentView);
+        titleElem.innerText = proj ? proj.name : 'Projeto';
+    }
+
+    let viewTasks = getTasksForCurrentView();
+
+    // Filtrar tarefas marcadas como ocultas via "Limpar Concluídas"
+    viewTasks = viewTasks.filter(t => !t.hiddenFromList);
+
+    // ORDENAÇÃO OBRIGATÓRIA: Prioridade Alta -> Média -> Baixa
+    const priorityWeight = { high: 3, medium: 2, low: 1 };
+    viewTasks.sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
+
+    viewTasks.forEach(task => {
+        const card = document.createElement('li');
+        card.className = `task-card priority-${task.priority}`;
+        card.ondblclick = () => openEditModal(task.id);
+
+        // Cor do Projeto na Borda Esquerda
+        let projectColor = '#8d8d99'; // padrão caixa de entrada
+        if (task.projectId !== 'inbox') {
+            const p = state.projects.find(proj => proj.id === task.projectId);
+            if (p) projectColor = p.color;
+        }
+        card.style.borderLeftColor = projectColor;
+
+        // Cálculos de Alerta (Vencimento e Estagnação 15 dias)
+        const now = new Date();
+        let isOverdue = false;
+        let isStagnant = false;
+        let stagnantDays = 0;
+
+        if (!task.completed) {
+            if (task.dueDate) {
+                const due = new Date(task.dueDate + 'T23:59:59');
+                if (now > due) isOverdue = true;
+            } else if (task.updatedAt) {
+                const updated = new Date(task.updatedAt);
+                const diffTime = Math.abs(now - updated);
+                stagnantDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                if (stagnantDays >= 15) isStagnant = true;
+            }
+        }
+
+        card.innerHTML = `
+            <div class="task-main">
+                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTaskComplete('${task.id}')">
+                <span class="task-text" style="${task.completed ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${task.text}</span>
+                <div class="task-tags">
+                    ${isOverdue ? `<span class="tag-alert"><i class="fa-solid fa-triangle-exclamation"></i> Vencida</span>` : ''}
+                    ${isStagnant ? `<span class="tag-stagnant"><i class="fa-solid fa-clock"></i> ⚠️ ${stagnantDays}d estagnada</span>` : ''}
+                    ${task.dueDate ? `<span class="tag-date"><i class="fa-regular fa-calendar"></i> ${formatDate(task.dueDate)}</span>` : ''}
+                </div>
+            </div>
+            <div class="task-card-actions">
+                <button title="Editar" onclick="openEditModal('${task.id}')"><i class="fa-solid fa-pen"></i></button>
+                <button title="Excluir" onclick="deleteTask('${task.id}')"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+
+        listContainer.appendChild(card);
+    });
+}
+
+function renderHistory() {
+    const historyContainer = document.getElementById('history-list');
+    historyContainer.innerHTML = '';
+
+    // Filtra concluídas nos últimos 7 dias
+    const completedTasks = state.tasks.filter(t => t.completed && t.completedAt);
+    document.getElementById('history-counter').innerText = completedTasks.length;
+
+    completedTasks.sort((a,b) => new Date(b.completedAt) - new Date(a.completedAt));
+
+    completedTasks.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        li.innerHTML = `
+            <span>✓ ${task.text}</span>
+            <span class="history-date">${formatDate(task.completedAt)}</span>
+        `;
+        historyContainer.appendChild(li);
+    });
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('pt-BR');
+}
+
+// --- WIDGET POMODORO & SINTETIZADOR DE ÁUDIO NATIVO ---
+function togglePomodoro() {
+    const btn = document.getElementById('pomo-start-btn');
+    if (pomodoro.isRunning) {
+        clearInterval(pomodoro.timerId);
+        pomodoro.isRunning = false;
+        btn.innerHTML = '<i class="fa-solid fa-play"></i>';
+    } else {
+        pomodoro.isRunning = true;
+        btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        pomodoro.endTime = Date.now() + (pomodoro.timeLeft * 1000);
+        
+        pomodoro.timerId = setInterval(() => {
+            const secondsLeft = Math.round((pomodoro.endTime - Date.now()) / 1000);
+            if (secondsLeft <= 0) {
+                clearInterval(pomodoro.timerId);
+                pomodoro.timeLeft = 0;
+                updatePomoDisplay();
+                triggerPomoAudio();
+                alert('Sessão do Pomodoro encerrada!');
+                resetPomodoro();
+            } else {
+                pomodoro.timeLeft = secondsLeft;
+                updatePomoDisplay();
+            }
+        }, 500);
+    }
+}
+
+function resetPomodoro() {
+    clearInterval(pomodoro.timerId);
+    pomodoro.isRunning = false;
+    pomodoro.timeLeft = 1500;
+    document.getElementById('pomo-start-btn').innerHTML = '<i class="fa-solid fa-play"></i>';
+    updatePomoDisplay();
+}
+
+function updatePomoDisplay() {
+    const minutes = Math.floor(pomodoro.timeLeft / 60);
+    const seconds = pomodoro.timeLeft % 60;
+    document.getElementById('pomo-timer').innerText = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Web Audio API Sintetizado
+function triggerPomoAudio() {
+    if (pomodoro.sound === 'mute') return;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (pomodoro.sound === 'beep') {
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+    } else if (pomodoro.sound === 'alarm') {
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
+    } else if (pomodoro.sound === 'zen') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(432, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.5);
+    }
+}
